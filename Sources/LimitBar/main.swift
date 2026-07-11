@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         rebuildMenu()
         renderIcon()
         poller.start()
+        Updates.check(announce: false)
     }
 
     func menuWillOpen(_ menu: NSMenu) { poller.pollNow() }
@@ -102,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func checkUpdates() { Updates.check(announce: true) }
     @objc private func openRepo() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/sashayakovlev/limitbar")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/sshykvlv/limitbar")!)
     }
     @objc private func renameAccount(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? UUID,
