@@ -20,4 +20,23 @@ final class ParserTests: XCTestCase {
         let usage = try ClaudeUsageParser.parse(Data("{}".utf8))
         XCTAssertNil(usage.fiveHour); XCTAssertNil(usage.sevenDay)
     }
+
+    func testCodexParsesLiveFixture() throws {
+        let usage = try CodexUsageParser.parse(try fixture("codex-usage"))
+        let fh = try XCTUnwrap(usage.fiveHour)
+        XCTAssert((0...100).contains(fh.utilization))
+        XCTAssertNotNil(fh.resetsAt)
+        let sd = try XCTUnwrap(usage.sevenDay)
+        XCTAssert((0...100).contains(sd.utilization))
+        XCTAssertNotNil(sd.resetsAt)
+    }
+
+    func testCodexMissingRateLimitThrows() {
+        XCTAssertThrowsError(try CodexUsageParser.parse(Data("{}".utf8)))
+    }
+
+    func testCodexMissingWindowsIsNil() throws {
+        let usage = try CodexUsageParser.parse(Data(#"{"rate_limit":{}}"#.utf8))
+        XCTAssertNil(usage.fiveHour); XCTAssertNil(usage.sevenDay)
+    }
 }
