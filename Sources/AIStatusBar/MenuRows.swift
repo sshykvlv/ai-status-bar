@@ -204,7 +204,12 @@ private struct WindowChip: View {
                 .fixedSize()
         }
         .padding(.horizontal, 7)
-        .padding(.vertical, 2.5)
+        // В живом NSMenu текстовый бокс резолвится с лишним лидингом снизу —
+        // при симметричном паддинге цифры прижимаются к верху чипа (замер:
+        // ~9px сверху против ~14px снизу @2x). Асимметрия центрирует глифы;
+        // офскрин-рендер (RowRenderTests) этого квирка не воспроизводит.
+        .padding(.top, 3)
+        .padding(.bottom, 2)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(hovered ? Color.white.opacity(0.18) : Self.chipFill)
