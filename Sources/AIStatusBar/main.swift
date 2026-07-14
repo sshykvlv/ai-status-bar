@@ -308,7 +308,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleLogin() {
         let svc = SMAppService.mainApp
         do { svc.status == .enabled ? try svc.unregister() : try svc.register() }
-        catch { NSSound.beep() }
+        catch {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Couldn't change Launch at Login"
+            alert.informativeText = error.localizedDescription
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        }
         rebuildMenu()
     }
     private static let usageAlertsKey = "usageAlertsEnabled"

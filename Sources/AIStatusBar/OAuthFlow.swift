@@ -64,7 +64,10 @@ final class OAuthFlow {
 
     private func startListener(store: AccountStore, reloginID: UUID?, onDone: @escaping () -> Void) {
         listener?.cancel()
-        guard let l = try? NWListener(using: .tcp, on: 54545) else { NSSound.beep(); return }
+        guard let l = try? NWListener(using: .tcp, on: 54545) else {
+            presentError("Couldn't start the local sign-in listener — port 54545 is already in use. Quit any other AI Status Bar processes (check Activity Monitor) and try again.")
+            return
+        }
         listener = l
         l.newConnectionHandler = { [weak self] conn in
             conn.start(queue: .main)
@@ -89,7 +92,10 @@ final class OAuthFlow {
 
     private func exchange(code: String, returnedState: String, store: AccountStore,
                           reloginID: UUID?, onDone: @escaping () -> Void) async {
-        guard returnedState == state else { NSSound.beep(); return }
+        guard returnedState == state else {
+            presentError("Sign-in didn't complete — the security check failed (state mismatch). Please try again.")
+            return
+        }
         var req = URLRequest(url: URL(string: ClaudeOAuthConstants.tokenURL)!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -101,13 +107,28 @@ final class OAuthFlow {
             "redirect_uri": ClaudeOAuthConstants.redirectURI,
             "code_verifier": verifier,
         ])
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as! HTTPURLResponse).statusCode == 200,
-              let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let data: Data, resp: URLResponse
+        do { (data, resp) = try await URLSession.shared.data(for: req) }
+        catch {
+            presentError("Couldn't reach Anthropic to finish sign-in: \(error.localizedDescription). Check your connection and try again.")
+            return
+        }
+        guard let http = resp as? HTTPURLResponse else {
+            presentError("Sign-in failed — Anthropic returned an unexpected response. Try again.")
+            return
+        }
+        guard http.statusCode == 200 else {
+            presentError("Sign-in failed — Anthropic rejected the request (HTTP \(http.statusCode)). Try Add Claude Account again.")
+            return
+        }
+        guard let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let access = d["access_token"] as? String,
               let refresh = d["refresh_token"] as? String,
               let expiresIn = (d["expires_in"] as? NSNumber)?.doubleValue
-        else { NSSound.beep(); return }
+        else {
+            presentError("Sign-in succeeded but the token response was malformed. Try Add Claude Account again.")
+            return
+        }
         let tokens = OAuthTokens(accessToken: access, refreshToken: refresh,
                                  expiresAt: Date().addingTimeInterval(expiresIn))
         let email = (d["account"] as? [String: Any])?["email_address"] as? String
@@ -123,8 +144,21 @@ final class OAuthFlow {
                 store.add(account)
             }
         } catch {
-            NSSound.beep(); return
+            presentError("Signed in, but saving the account to Keychain failed: \(error.localizedDescription). Try again.")
+            return
         }
         onDone()
+    }
+
+    /// Every OAuthFlow failure surfaces here instead of a silent beep — a background
+    /// menu bar app that only ever beeps on failure leaves the owner guessing why
+    /// "Add Claude Account…" didn't work (HANDOFF issue #3).
+    private func presentError(_ message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Couldn't add Claude account"
+        alert.informativeText = message
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 }
