@@ -125,11 +125,17 @@ final class Poller {
                      sevenDay: forecast(usage.sevenDay, keySuffix: "7d"))
     }
 
-    /// Fetches an account's identity (email + plan) once and caches it via the store.
-    /// Never on every poll — a successful or failed attempt is remembered for the
+    /// Fetches an account's identity (email + plan) once per app launch and caches
+    /// it via the store. Never on every poll — an attempt is remembered for the
     /// lifetime of this Poller so we don't spam the profile endpoint or Keychain.
+    /// Re-verifies even when `account.email` is already cached from a previous
+    /// launch: a claudeConfigDir/CODEX_HOME's underlying credential can get
+    /// silently re-logged into a different Anthropic account between launches
+    /// (this owner's two-CLI-profile setup has done that more than once), and a
+    /// stale cached email would otherwise keep showing the wrong identity for
+    /// that row indefinitely.
     private func fetchIdentityIfNeeded(_ account: Account) async {
-        guard account.email == nil, !identityAttempted.contains(account.id) else { return }
+        guard !identityAttempted.contains(account.id) else { return }
         identityAttempted.insert(account.id)
         switch account.kind {
         case .claudeMain:
