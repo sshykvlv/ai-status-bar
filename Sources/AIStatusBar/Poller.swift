@@ -1,7 +1,15 @@
 import Foundation
+import os
 
 @MainActor
 final class Poller {
+    /// Was silent until 2026-07-20 — a real "opять логинится" complaint the next morning
+    /// left zero trace anywhere (no app log at all, and system securityd/coreauthd logs
+    /// had nothing for AIStatusBar either), so there was no way to tell a genuine denial
+    /// from the dark-wake false-positive `pollAfterWake()` already guards against. Query
+    /// with `log show --predicate 'subsystem == "lv.ykv.aistatusbar"' --info`.
+    private static let log = Logger(subsystem: "lv.ykv.aistatusbar", category: "poller")
+
     nonisolated static let interval: TimeInterval = 60
     nonisolated static let backoffSchedule: [TimeInterval] = [120, 240, 480, 900]
 
@@ -45,7 +53,10 @@ final class Poller {
     /// false re-login badge on an account that was fine a second ago. Retrying
     /// once, only for accounts that just went from .ok to an auth failure, fixes
     /// the false flash without masking a genuine logout for more than ~2s.
-    func pollAfterWake() { Task { await pollAll(force: true, retryUnauthorizedOnce: true) } }
+    func pollAfterWake() {
+        Self.log.notice("pollAfterWake fired")
+        Task { await pollAll(force: true, retryUnauthorizedOnce: true) }
+    }
 
     func state(for id: UUID) -> AccountState { states[id] ?? .pending }
 
@@ -69,11 +80,17 @@ final class Poller {
     private func poll(_ account: Account, force: Bool, retryUnauthorizedOnce: Bool = false) async {
         let now = Date()
         if let gate = nextAllowed[account.id], now < gate, !force { return }
-        if let authGate = authNextAllowed[account.id], now < authGate { return }
+        if let authGate = authNextAllowed[account.id], now < authGate {
+            Self.log.debug("skip \(account.name, privacy: .public): auth backoff until \(authGate, privacy: .public)")
+            return
+        }
         if force, let last = lastFetch(account.id), now.timeIntervalSince(last) < 10 { return }
         nextAllowed[account.id] = now.addingTimeInterval(Self.interval - 1)
         do {
             let fetched = try await fetchUsage(for: account)
+            if authFailureLevel[account.id] != nil {
+                Self.log.notice("recovered \(account.name, privacy: .public) after auth failure")
+            }
             backoffLevel[account.id] = nil
             authFailureLevel[account.id] = nil
             authNextAllowed[account.id] = nil
@@ -91,15 +108,19 @@ final class Poller {
             demote(account.id, badge: "rate-limited")
         } catch FetchError.unauthorized {
             if retryUnauthorizedOnce, case .ok = states[account.id] ?? .pending {
+                Self.log.notice("unauthorized \(account.name, privacy: .public) right after wake, was .ok — retrying once in 2s (dark-wake guard)")
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 await poll(account, force: true, retryUnauthorizedOnce: false)
                 return
             }
             let lvl = min((authFailureLevel[account.id] ?? -1) + 1, Self.backoffSchedule.count - 1)
             authFailureLevel[account.id] = lvl
-            authNextAllowed[account.id] = Date().addingTimeInterval(Self.backoffSchedule[lvl])
+            let until = Date().addingTimeInterval(Self.backoffSchedule[lvl])
+            authNextAllowed[account.id] = until
+            Self.log.error("unauthorized \(account.name, privacy: .public) kind=\(account.kind.rawValue, privacy: .public) level=\(lvl, privacy: .public) backoffUntil=\(until, privacy: .public)")
             demote(account.id, badge: badgeForAuthFailure(account))
         } catch {
+            Self.log.error("offline \(account.name, privacy: .public): \(String(describing: error), privacy: .public)")
             demote(account.id, badge: "offline")
         }
     }
