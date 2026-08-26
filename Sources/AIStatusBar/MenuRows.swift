@@ -226,7 +226,7 @@ private struct WindowChip: View {
 }
 
 enum MenuRowFactory {
-    static let rowWidth: CGFloat = 340
+    static let rowWidth: CGFloat = 300
     // Одна текстовая строка 12.5pt + по ~5pt воздуха сверху/снизу (V2-B,
     // выбор владельца 12.07 — ниже и плотнее двухстрочного варианта).
     static let rowHeight: CGFloat = 25

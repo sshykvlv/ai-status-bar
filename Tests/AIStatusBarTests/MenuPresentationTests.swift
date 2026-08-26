@@ -17,7 +17,9 @@ final class MenuPresentationTests: XCTestCase {
     }
 
     func testMenuWidthFitsContentWithoutHeaderSlack() {
-        XCTAssertEqual(MenuRowFactory.rowWidth, 340)
+        let item = MenuRowFactory.item(for: account, state: .pending)
+
+        XCTAssertLessThanOrEqual(item.view?.frame.width ?? .infinity, 300)
     }
 
     func testWindowTooltipsIdentifyBothWindowsWithoutAHeader() {
