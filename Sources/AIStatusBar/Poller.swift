@@ -30,7 +30,6 @@ final class Poller {
     var onAlerts: (([AlertEvent]) -> Void)?
     private let burnRateEstimator = BurnRateEstimator()
 
-    private var codexAccessOverride: [UUID: String] = [:]   // refreshed token per codex account
     private var ownTokens: [UUID: OAuthTokens] = [:]
     private var identityAttempted: Set<UUID> = []
 
@@ -145,15 +144,20 @@ final class Poller {
         case .codex:
             let loaded = account.codexHome.flatMap { CodexAuth.load(homePath: $0) } ?? CodexAuth.load()
             guard let auth = loaded else { throw FetchError.unauthorized }
-            do {
-                return try await CodexProvider().fetchUsage(accessToken: codexAccessOverride[account.id] ?? auth.accessToken)
-            } catch FetchError.unauthorized {
-                let fresh = try await CodexProvider().refresh(auth)
-                codexAccessOverride[account.id] = fresh
-                return try await CodexProvider().fetchUsage(accessToken: fresh)
-            }
+            // CLI credentials are read-only. Refreshing them can rotate a refresh token
+            // that only the CLI is allowed to persist, so a legacy 401 becomes an
+            // in-app reconnect prompt instead of mutating or invalidating the CLI session.
+            return try await CodexProvider().fetchUsage(accessToken: auth.accessToken)
         case .codexOAuth:
-            throw FetchError.unauthorized
+            guard var tokens = ownTokens[account.id] ?? KeychainStore.loadOwn(accountID: account.id) else {
+                throw FetchError.unauthorized
+            }
+            if tokens.expiresAt < Date().addingTimeInterval(300) {
+                tokens = try await CodexProvider().refresh(tokens)
+                try KeychainStore.saveOwn(tokens, accountID: account.id)
+            }
+            ownTokens[account.id] = tokens
+            return try await CodexProvider().fetchUsage(accessToken: tokens.accessToken)
         }
     }
 
@@ -207,7 +211,10 @@ final class Poller {
                 store.setEmail(id: account.id, email)
             }
         case .codexOAuth:
-            return
+            guard let tokens = ownTokens[account.id] ?? KeychainStore.loadOwn(accountID: account.id) else { return }
+            let identityToken = tokens.idToken ?? tokens.accessToken
+            store.setEmail(id: account.id, CodexJWT.email(identityToken),
+                           plan: CodexJWT.plan(identityToken))
         }
     }
 

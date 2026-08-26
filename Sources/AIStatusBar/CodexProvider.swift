@@ -33,21 +33,7 @@ struct CodexAuth: Equatable {
 
     /// Decodes the `email` claim from the id_token JWT payload. Pure/offline — no network.
     func email() -> String? {
-        guard let idToken else { return nil }
-        let parts = idToken.split(separator: ".")
-        guard parts.count >= 2 else { return nil }
-        guard let payload = Self.base64URLDecode(String(parts[1])),
-              let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any]
-        else { return nil }
-        return json["email"] as? String
-    }
-
-    private static func base64URLDecode(_ s: String) -> Data? {
-        var str = s.replacingOccurrences(of: "-", with: "+")
-                   .replacingOccurrences(of: "_", with: "/")
-        let padding = str.count % 4
-        if padding > 0 { str += String(repeating: "=", count: 4 - padding) }
-        return Data(base64Encoded: str)
+        idToken.flatMap(CodexJWT.email)
     }
 }
 
@@ -70,24 +56,47 @@ struct CodexProvider {
         }
     }
 
-    // In-memory refresh only: auth.json is never touched. Used by later tasks (Poller);
-    // not exercised by this task's tests. Endpoint/client_id are best-effort from
-    // CodexBar reverse-engineering — unverified until a real 401 happens against them.
-    func refresh(_ auth: CodexAuth) async throws -> String {
-        var req = URLRequest(url: URL(string: "https://auth.openai.com/oauth/token")!)
+    func exchangeAuthorizationCode(code: String, verifier: String,
+                                   redirectURI: String = CodexOAuthConstants.redirectURI,
+                                   now: Date = .now) async throws -> OAuthTokens {
+        let request = CodexOAuthRequest.authorizationCodeRequest(
+            code: code, verifier: verifier, redirectURI: redirectURI)
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await session.data(for: request) }
+        catch { throw FetchError.network(error.localizedDescription) }
+        guard let http = response as? HTTPURLResponse else { throw FetchError.unauthorized }
+        guard http.statusCode == 200,
+              let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let access = body["access_token"] as? String,
+              let refresh = body["refresh_token"] as? String,
+              let idToken = body["id_token"] as? String
+        else { throw FetchError.unauthorized }
+        return OAuthTokens(accessToken: access, refreshToken: refresh,
+                           expiresAt: CodexJWT.expiration(access) ?? now.addingTimeInterval(3600),
+                           idToken: idToken)
+    }
+
+    func refresh(_ tokens: OAuthTokens, now: Date = .now) async throws -> OAuthTokens {
+        var req = URLRequest(url: URL(string: CodexOAuthConstants.tokenURL)!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "client_id": CodexOAuthConstants.clientID,
             "grant_type": "refresh_token",
-            "refresh_token": auth.refreshToken,
-            "client_id": "app_EMoamEEZ73f0CkXaXp7hrann",   // codex CLI's public client_id
-            "scope": "openid profile email",
+            "refresh_token": tokens.refreshToken,
         ])
-        let (data, resp) = try await session.data(for: req)
-        guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
-              let d = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let access = d["access_token"] as? String
+        let data: Data, response: URLResponse
+        do { (data, response) = try await session.data(for: req) }
+        catch { throw FetchError.network(error.localizedDescription) }
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw FetchError.unauthorized }
-        return access
+        let access = body["access_token"] as? String ?? tokens.accessToken
+        return OAuthTokens(
+            accessToken: access,
+            refreshToken: body["refresh_token"] as? String ?? tokens.refreshToken,
+            expiresAt: CodexJWT.expiration(access)
+                ?? (access == tokens.accessToken ? tokens.expiresAt : now.addingTimeInterval(3600)),
+            idToken: body["id_token"] as? String ?? tokens.idToken)
     }
 }
