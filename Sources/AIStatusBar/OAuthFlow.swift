@@ -153,7 +153,7 @@ final class OAuthFlow {
 
     /// Every OAuthFlow failure surfaces here instead of a silent beep — a background
     /// menu bar app that only ever beeps on failure leaves the owner guessing why
-    /// "Add Claude Account…" didn't work (HANDOFF issue #3).
+    /// browser sign-in didn't work (HANDOFF issue #3).
     private func presentError(_ message: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning

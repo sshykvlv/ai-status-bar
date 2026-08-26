@@ -7,6 +7,7 @@ struct AccountRowView: View {
     let kind: AccountKind
     var email: String? = nil
     var plan: String? = nil
+    var accessibilityTitle: String? = nil
 
     @State private var hovered = false
 
@@ -83,7 +84,8 @@ struct AccountRowView: View {
             case .pending:
                 windows(usage: nil)
             case .failed(let badge):
-                Label(badge, systemImage: "exclamationmark.triangle")
+                Label(MenuPresentation.statusLines(for: .failed(badge: badge)).first ?? badge,
+                      systemImage: "exclamationmark.triangle")
                     .font(.system(size: 11)).foregroundStyle(.orange)
             case .ok(let usage, _), .stale(let usage, _, _):
                 windows(usage: usage)
@@ -107,6 +109,8 @@ struct AccountRowView: View {
                 .padding(.horizontal, 5)
         )
         .onHover { hovered = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilityTitle ?? resolvedName))
     }
 
     // Дизайн «F2 — раздельные плашки» (выбор владельца 12.07, эволюция «D2 — только
@@ -224,11 +228,25 @@ enum MenuRowFactory {
     // Одна текстовая строка 12.5pt + по ~5pt воздуха сверху/снизу (V2-B,
     // выбор владельца 12.07 — ниже и плотнее двухстрочного варианта).
     static let rowHeight: CGFloat = 25
+    static let headerHeight: CGFloat = 20
+
+    static func headerItem() -> NSMenuItem {
+        let item = NSMenuItem()
+        let host = NSHostingView(rootView: MenuHeaderView())
+        host.sizingOptions = []
+        host.frame = NSRect(x: 0, y: 0, width: rowWidth, height: headerHeight)
+        item.view = host
+        item.title = MenuPresentation.columnLabels.joined(separator: ", ")
+        item.isEnabled = false
+        return item
+    }
 
     static func item(for account: Account, state: AccountState) -> NSMenuItem {
         let item = NSMenuItem()
+        let accessibilityTitle = MenuPresentation.accessibilityTitle(account: account, state: state)
         let row = AccountRowView(name: account.name, state: state, kind: account.kind,
-                                  email: account.email, plan: account.plan)
+                                 email: account.email, plan: account.plan,
+                                 accessibilityTitle: accessibilityTitle)
         let host = NSHostingView(rootView: row)
         // Disable NSHostingView's own intrinsic-size layout so it can't leave stale sizing
         // slack in the parent NSMenu window (the "gap after Quit" gotcha). macOS 13+.
@@ -237,8 +255,26 @@ enum MenuRowFactory {
         item.view = host
         // Title у view-item не рисуется (NSMenuItem.view забирает отрисовку),
         // но продолжает питать type-select и VoiceOver — заполняем всегда.
-        item.title = account.name
+        item.title = accessibilityTitle
         item.representedObject = account.id
         return item
+    }
+}
+
+private struct MenuHeaderView: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(MenuPresentation.columnLabels[0])
+            Spacer(minLength: 12)
+            Text(MenuPresentation.columnLabels[1]).frame(width: 46, alignment: .center)
+            Text(MenuPresentation.columnLabels[2]).frame(width: 46, alignment: .center)
+            Color.clear.frame(width: 11)
+        }
+        .font(.system(size: 9.5, weight: .medium))
+        .foregroundStyle(Color(nsColor: .tertiaryLabelColor))
+        .padding(.horizontal, 12)
+        .frame(width: MenuRowFactory.rowWidth, height: MenuRowFactory.headerHeight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Account usage columns: 5-hour and week")
     }
 }

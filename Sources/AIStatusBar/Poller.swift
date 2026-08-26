@@ -219,11 +219,7 @@ final class Poller {
     }
 
     private func badgeForAuthFailure(_ account: Account) -> String {
-        switch account.kind {
-        case .claudeMain: return account.claudeConfigDir == nil ? "open Claude Code" : "re-login CLI profile"
-        case .claudeOAuth: return "re-login"
-        case .codex, .codexOAuth: return "re-login"
-        }
+        MenuPresentation.authFailureBadge(for: account.kind)
     }
 
     private func demote(_ id: UUID, badge: String) {

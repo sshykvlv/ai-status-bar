@@ -8,7 +8,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var store: AccountStore!
     private var poller: Poller!
     private let menu = NSMenu()
-    private let updatedItem = NSMenuItem(title: "Updated —", action: nil, keyEquivalent: "")
     private var appearanceObservation: NSKeyValueObservation?
     private var wakeObserver: NSObjectProtocol?
 
@@ -80,24 +79,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func rebuildMenu() {
         menu.removeAllItems()
+        if !store.accounts.isEmpty {
+            menu.addItem(MenuRowFactory.headerItem())
+        }
         for account in store.accounts {
             let item = MenuRowFactory.item(for: account, state: poller.state(for: account.id))
             item.submenu = accountSubmenu(account)
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        updatedItem.isEnabled = false
-        menu.addItem(updatedItem)
-        addAction("Add Account…", #selector(addAccount))
+        addAction(MenuPresentation.topLevelActionTitles[0], #selector(addAccount))
         menu.addItem(.separator())
-        let login = addAction("Launch at Login", #selector(toggleLogin))
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        let alerts = addAction("Usage Alerts", #selector(toggleUsageAlerts))
-        alerts.state = UserDefaults.standard.bool(forKey: Self.usageAlertsKey) ? .on : .off
-        addAction("Check for Updates…", #selector(checkUpdates))
-        addAction("View on GitHub", #selector(openRepo))
+        let settings = NSMenuItem(title: MenuPresentation.topLevelActionTitles[1], action: nil,
+                                  keyEquivalent: "")
+        settings.submenu = settingsSubmenu()
+        menu.addItem(settings)
+        addAction(MenuPresentation.topLevelActionTitles[2], #selector(showAbout))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit AI Status Bar",
+        menu.addItem(NSMenuItem(title: MenuPresentation.topLevelActionTitles[3],
                                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
@@ -107,6 +106,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.target = self
         menu.addItem(item)
         return item
+    }
+
+    private func settingsSubmenu() -> NSMenu {
+        let submenu = NSMenu()
+        let login = NSMenuItem(title: MenuPresentation.settingsActionTitles[0],
+                               action: #selector(toggleLogin), keyEquivalent: "")
+        login.target = self
+        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        submenu.addItem(login)
+
+        let alerts = NSMenuItem(title: MenuPresentation.settingsActionTitles[1],
+                                action: #selector(toggleUsageAlerts), keyEquivalent: "")
+        alerts.target = self
+        alerts.state = UserDefaults.standard.bool(forKey: Self.usageAlertsKey) ? .on : .off
+        submenu.addItem(alerts)
+
+        submenu.addItem(.separator())
+        let updates = NSMenuItem(title: MenuPresentation.settingsActionTitles[2],
+                                 action: #selector(checkUpdates), keyEquivalent: "")
+        updates.target = self
+        submenu.addItem(updates)
+        return submenu
     }
 
     private func accountSubmenu(_ account: Account) -> NSMenu {
@@ -149,18 +170,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         switch poller.state(for: account.id) {
         case .pending:
-            sub.addItem(infoItem("Loading…", color: .secondaryLabelColor))
+            addStatusLines(sub, state: .pending)
             sub.addItem(.separator())
         case .failed(let badge):
-            sub.addItem(infoItem(badge, color: .asbWarn))
+            addStatusLines(sub, state: .failed(badge: badge))
             sub.addItem(.separator())
-        case .ok(let usage, _), .stale(let usage, _, _):
+        case .ok(let usage, _):
             addWindowDetails(sub, title: "5-hour window", window: usage.fiveHour)
             addWindowDetails(sub, title: "Weekly window", window: usage.sevenDay)
-            if case .stale(_, _, let badge) = poller.state(for: account.id) {
-                sub.addItem(infoItem("⚠ \(badge)", color: .asbWarn))
-            }
             sub.addItem(.separator())
+        case .stale(let usage, let fetchedAt, let badge):
+            addWindowDetails(sub, title: "5-hour window", window: usage.fiveHour)
+            addWindowDetails(sub, title: "Weekly window", window: usage.sevenDay)
+            addStatusLines(sub, state: .stale(usage, fetchedAt: fetchedAt, badge: badge))
+            sub.addItem(.separator())
+        }
+    }
+
+    private func addStatusLines(_ sub: NSMenu, state: AccountState) {
+        let lines = MenuPresentation.statusLines(for: state)
+        let isWarning: Bool
+        switch state {
+        case .failed, .stale: isWarning = true
+        case .pending, .ok: isWarning = false
+        }
+        for (index, line) in lines.enumerated() {
+            let warningTitle = isWarning && index == 0 ? "⚠ \(line)" : line
+            sub.addItem(infoItem(warningTitle,
+                                 color: isWarning && index == 0 ? .asbWarn : .secondaryLabelColor))
         }
     }
 
@@ -208,8 +245,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             rebuildMenu()
         }
         renderIcon()
-        let f = DateFormatter(); f.timeStyle = .short
-        updatedItem.title = "Updated \(f.string(from: Date()))"
     }
 
     /// Обновляет открытое меню без removeAllItems: та же геометрия, свежие данные.
@@ -218,8 +253,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let id = item.representedObject as? UUID,
                   let account = store.accounts.first(where: { $0.id == id }),
                   let host = item.view as? NSHostingView<AccountRowView> else { continue }
+            let accessibilityTitle = MenuPresentation.accessibilityTitle(
+                account: account, state: poller.state(for: id))
             host.rootView = AccountRowView(name: account.name, state: poller.state(for: id),
-                                           kind: account.kind, email: account.email, plan: account.plan)
+                                           kind: account.kind, email: account.email, plan: account.plan,
+                                           accessibilityTitle: accessibilityTitle)
+            item.title = accessibilityTitle
         }
     }
 
@@ -282,8 +321,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         rebuildMenu()
     }
     @objc private func checkUpdates() { Updates.check(announce: true) }
-    @objc private func openRepo() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/sshykvlv/ai-status-bar")!)
+    @objc private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
     }
     @objc private func renameAccount(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? UUID,
