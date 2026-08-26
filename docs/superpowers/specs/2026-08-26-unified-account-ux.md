@@ -1,6 +1,6 @@
 # Unified Account UX Design
 
-**Date:** 2026-08-26  
+**Date:** 2026-08-26
 **Status:** Approved through menu, add-account, and reconnect mockups
 
 ## Goal

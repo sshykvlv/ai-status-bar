@@ -25,7 +25,7 @@
 
 Add tests proving that old `OAuthTokens` JSON still decodes, new optional ID-token data round-trips, and migrating a builtin account preserves ID/name/order while changing its kind and preventing rediscovery.
 
-Run: `swift test --filter 'OAuthTests|AccountStoreTests'`  
+Run: `swift test --filter 'OAuthTests|AccountStoreTests'`
 Expected: FAIL because `codexOAuth`, optional ID tokens, and `migrateToOwned` do not exist.
 
 **Step 2: Implement the smallest compatible model change**
@@ -34,7 +34,7 @@ Add `AccountKind.codexOAuth`, make `Account.kind` mutable, add optional `idToken
 
 **Step 3: Verify and commit**
 
-Run: `swift test --filter 'OAuthTests|AccountStoreTests'`  
+Run: `swift test --filter 'OAuthTests|AccountStoreTests'`
 Expected: PASS.
 
 Commit: `git add Sources/AIStatusBar/Models.swift Sources/AIStatusBar/AccountStore.swift Sources/AIStatusBar/KeychainStore.swift Tests/AIStatusBarTests/OAuthTests.swift Tests/AIStatusBarTests/PollerTests.swift && git commit -m "feat: model app-owned provider sessions"`
@@ -52,7 +52,7 @@ Commit: `git add Sources/AIStatusBar/Models.swift Sources/AIStatusBar/AccountSto
 
 Test the authorize URL, callback path/state parsing, form-encoded authorization-code exchange, token-response decoding, JWT expiry/email extraction, and refresh merging when OpenAI rotates only some returned tokens.
 
-Run: `swift test --filter 'OAuthTests|ProviderTests'`  
+Run: `swift test --filter 'OAuthTests|ProviderTests'`
 Expected: FAIL because the Codex OAuth request builders and refresh-token merge do not exist.
 
 **Step 2: Implement OAuth and refresh**
@@ -61,7 +61,7 @@ Implement PKCE browser sign-in on the Codex loopback callback, exchange the code
 
 **Step 3: Verify and commit**
 
-Run: `swift test --filter 'OAuthTests|ProviderTests|PollerTests'`  
+Run: `swift test --filter 'OAuthTests|ProviderTests|PollerTests'`
 Expected: PASS.
 
 Commit: `git add Sources/AIStatusBar/CodexOAuthFlow.swift Sources/AIStatusBar/CodexProvider.swift Sources/AIStatusBar/Poller.swift Tests/AIStatusBarTests/OAuthTests.swift Tests/AIStatusBarTests/ProviderTests.swift Tests/AIStatusBarTests/PollerTests.swift && git commit -m "feat: own and refresh Codex browser sessions"`
@@ -78,7 +78,7 @@ Commit: `git add Sources/AIStatusBar/CodexOAuthFlow.swift Sources/AIStatusBar/Co
 
 Extract and test a pure account-action policy: every account can sign in again; Claude sources route to Claude OAuth; Codex sources route to Codex OAuth; successful reconnect preserves the selected row.
 
-Run: `swift test --filter 'OAuthTests|AccountActionsTests'`  
+Run: `swift test --filter 'OAuthTests|AccountActionsTests'`
 Expected: FAIL because the unified provider routing does not exist.
 
 **Step 2: Implement the approved flow**
@@ -87,7 +87,7 @@ Replace all three add actions with `Add Account…`, present Claude/Codex/Cancel
 
 **Step 3: Verify and commit**
 
-Run: `swift test --filter 'OAuthTests|AccountActionsTests'`  
+Run: `swift test --filter 'OAuthTests|AccountActionsTests'`
 Expected: PASS.
 
 Commit: `git add Sources/AIStatusBar/OAuthFlow.swift Sources/AIStatusBar/main.swift Tests/AIStatusBarTests/OAuthTests.swift Tests/AIStatusBarTests/AccountActionsTests.swift && git commit -m "feat: unify account add and recovery"`
@@ -104,7 +104,7 @@ Commit: `git add Sources/AIStatusBar/OAuthFlow.swift Sources/AIStatusBar/main.sw
 
 Test the compact 340-point width, per-chip hover labels, accessible account titles, `Session expired`, `Last data retained`, and the absence of CLI instructions and manual-refresh text from the presentation model.
 
-Run: `swift test --filter 'MenuPresentationTests|RowRenderTests'`  
+Run: `swift test --filter 'MenuPresentationTests|RowRenderTests'`
 Expected: FAIL because the header and presentation helpers do not exist.
 
 **Step 2: Implement the menu**
@@ -113,7 +113,7 @@ Remove the column header and `Updated HH:mm`, keep no `Refresh Now`, narrow the 
 
 **Step 3: Verify and commit**
 
-Run: `swift test --filter 'MenuPresentationTests|RowRenderTests'`  
+Run: `swift test --filter 'MenuPresentationTests|RowRenderTests'`
 Expected: PASS.
 
 Commit: `git add Sources/AIStatusBar/MenuRows.swift Sources/AIStatusBar/main.swift Tests/AIStatusBarTests/MenuPresentationTests.swift Tests/AIStatusBarTests/RowRenderTests.swift && git commit -m "feat: simplify the status bar menu"`
@@ -130,13 +130,13 @@ Document one browser-based add flow, independent CLI sessions, soft migration, K
 
 **Step 2: Run the full verification suite**
 
-Run: `swift test`  
+Run: `swift test`
 Expected: all tests pass.
 
-Run: `swift build -c release`  
+Run: `swift build -c release`
 Expected: release build succeeds.
 
-Run: `AISTATUSBAR_MOCK=1 swift run AIStatusBar`  
+Run: `AISTATUSBAR_MOCK=1 swift run AIStatusBar`
 Expected: the actual menu matches the approved hierarchy and account states.
 
 **Step 3: Capture visual proof and commit**
