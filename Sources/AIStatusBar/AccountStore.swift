@@ -57,6 +57,24 @@ final class AccountStore: @unchecked Sendable {
         if let plan { accounts[i].plan = plan }
         persist()
     }
+    func migrateToOwned(id: UUID, kind: AccountKind, email: String?, plan: String? = nil) {
+        guard kind.isOwned,
+              let i = accounts.firstIndex(where: { $0.id == id }) else { return }
+        let source = accounts[i]
+        let wasBuiltinClaude = source.kind == .claudeMain && source.claudeConfigDir == nil
+        let wasBuiltinCodex = source.kind == .codex && source.codexHome == nil
+        if wasBuiltinClaude { dismissedBuiltins.insert(AccountKind.claudeMain.rawValue) }
+        if wasBuiltinCodex { dismissedBuiltins.insert(AccountKind.codex.rawValue) }
+        if wasBuiltinClaude || wasBuiltinCodex {
+            defaults.set(Array(dismissedBuiltins), forKey: dismissedKey)
+        }
+        accounts[i].kind = kind
+        accounts[i].email = email
+        if let plan { accounts[i].plan = plan }
+        accounts[i].codexHome = nil
+        accounts[i].claudeConfigDir = nil
+        persist()
+    }
     func remove(id: UUID) {
         guard let account = accounts.first(where: { $0.id == id }) else { return }
         // Dismissal только для автоподхваченных builtin-ов (основной Claude без своего
@@ -76,7 +94,7 @@ final class AccountStore: @unchecked Sendable {
 
     /// Codex всегда последним.
     private func insertSorted(_ account: Account) {
-        if let codexIdx = accounts.firstIndex(where: { $0.kind == .codex }), account.kind != .codex {
+        if let codexIdx = accounts.firstIndex(where: { $0.kind.isCodex }), !account.kind.isCodex {
             accounts.insert(account, at: codexIdx)
         } else {
             accounts.append(account)

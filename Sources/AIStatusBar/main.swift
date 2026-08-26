@@ -147,7 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // «Claude Code»). Identity — контрастная, сервис · тариф — вторичным.
         let identity = AccountRowView.resolvedName(name: account.name, email: account.email)
         sub.addItem(infoItem(identity, color: .labelColor, semiboldPrefix: identity))
-        let service = account.kind == .codex ? "Codex" : "Claude Code"
+        let service = account.kind.isCodex ? "Codex" : "Claude Code"
         sub.addItem(infoItem(account.plan.map { "\(service) · \($0)" } ?? service, color: .secondaryLabelColor))
         sub.addItem(.separator())
 

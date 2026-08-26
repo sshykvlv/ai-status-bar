@@ -18,14 +18,14 @@ struct AccountRowView: View {
     private var serviceSuffix: String {
         switch kind {
         case .claudeMain, .claudeOAuth: return "Claude"
-        case .codex: return "Codex"
+        case .codex, .codexOAuth: return "Codex"
         }
     }
 
     private var serviceLabel: String {
         switch kind {
         case .claudeMain, .claudeOAuth: return "Claude Code"
-        case .codex: return "Codex"
+        case .codex, .codexOAuth: return "Codex"
         }
     }
 

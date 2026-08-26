@@ -6,6 +6,7 @@ struct OAuthTokens: Codable, Equatable {
     var accessToken: String
     var refreshToken: String
     var expiresAt: Date
+    var idToken: String? = nil
 }
 
 enum KeychainStore {

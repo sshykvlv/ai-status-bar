@@ -152,6 +152,8 @@ final class Poller {
                 codexAccessOverride[account.id] = fresh
                 return try await CodexProvider().fetchUsage(accessToken: fresh)
             }
+        case .codexOAuth:
+            throw FetchError.unauthorized
         }
     }
 
@@ -204,6 +206,8 @@ final class Poller {
             if let email = auth?.email() {
                 store.setEmail(id: account.id, email)
             }
+        case .codexOAuth:
+            return
         }
     }
 
@@ -211,7 +215,7 @@ final class Poller {
         switch account.kind {
         case .claudeMain: return account.claudeConfigDir == nil ? "open Claude Code" : "re-login CLI profile"
         case .claudeOAuth: return "re-login"
-        case .codex: return "run codex login"
+        case .codex, .codexOAuth: return "re-login"
         }
     }
 
