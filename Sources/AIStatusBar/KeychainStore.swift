@@ -39,13 +39,20 @@ enum KeychainStore {
     // MARK: свои токены (по аккаунту)
     static func saveOwn(_ tokens: OAuthTokens, accountID: UUID) throws {
         let data = try JSONEncoder().encode(tokens)
-        deleteOwn(accountID: accountID)
-        let attrs: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: ownService,
             kSecAttrAccount as String: accountID.uuidString,
-            kSecValueData as String: data,
         ]
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else {
+            throw FetchError.badResponse("keychain save failed")
+        }
+        var attrs = query
+        attrs[kSecValueData as String] = data
         guard SecItemAdd(attrs as CFDictionary, nil) == errSecSuccess else {
             throw FetchError.badResponse("keychain save failed")
         }

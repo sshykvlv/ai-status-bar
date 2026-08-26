@@ -41,6 +41,21 @@ final class ProviderTests: XCTestCase {
         XCTAssertNil(KeychainStore.loadOwn(accountID: id))
     }
 
+    func testOwnTokensCanBeReplacedAfterRefreshRotation() throws {
+        let id = UUID()
+        defer { KeychainStore.deleteOwn(accountID: id) }
+        let original = OAuthTokens(accessToken: "old-access", refreshToken: "old-refresh",
+                                   expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
+        let rotated = OAuthTokens(accessToken: "new-access", refreshToken: "new-refresh",
+                                  expiresAt: Date(timeIntervalSince1970: 2_000_000_000),
+                                  idToken: "new-identity")
+
+        try KeychainStore.saveOwn(original, accountID: id)
+        try KeychainStore.saveOwn(rotated, accountID: id)
+
+        XCTAssertEqual(KeychainStore.loadOwn(accountID: id), rotated)
+    }
+
     // Opt-in: чтение чужой записи "Claude Code-credentials" вызывает блокирующий
     // диалог Keychain у любого, кто запускает тесты. Гоняем только когда явно просят:
     // AISTATUSBAR_TEST_KEYCHAIN=1 swift test
