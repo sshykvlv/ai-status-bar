@@ -1,62 +1,68 @@
-// Генератор иконки приложения: белый тайл + три вертикальных гейдж-бара
-// (трек + заполнение снизу) — эхо менюбар-глифа IconRenderer (концепт A,
-// выбор владельца 13.07: «А, но на белом фоне»). Высоты = семантика
-// приложения «заполнение = израсходовано» (фидбэк владельца 14.07):
-// графит — спокойный ~45%, янтарь — warn ~78% (≥70), красный — danger
-// ~94% (≥90). Запуск: swift scripts/gen-appicon.swift → icon/AppIcon-1024.png
+// Генератор плоской иконки приложения: округлые штрихи складываются в «AI».
+// Палитра повторяет графики приложения: neutral / warn / danger.
+// Запуск: swift scripts/gen-appicon.swift → icon/AppIcon-1024.png
 import AppKit
-import CoreGraphics
 
 let size: CGFloat = 1024
-let image = NSImage(size: NSSize(width: size, height: size))
-image.lockFocus()
-guard let ctx = NSGraphicsContext.current?.cgContext else { fatalError("no ctx") }
+let rep = NSBitmapImageRep(
+    bitmapDataPlanes: nil,
+    pixelsWide: Int(size),
+    pixelsHigh: Int(size),
+    bitsPerSample: 8,
+    samplesPerPixel: 4,
+    hasAlpha: true,
+    isPlanar: false,
+    colorSpaceName: .calibratedRGB,
+    bytesPerRow: 0,
+    bitsPerPixel: 0
+)!
+rep.size = NSSize(width: size, height: size)
 
-// Тайл: macOS-скругление ~22.6% стороны; белый с едва тёплым градиентом вниз,
-// чтобы тайл не выглядел «дыркой» на светлых фонах.
-let tile = NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: size, height: size),
-                        xRadius: size * 0.226, yRadius: size * 0.226)
-tile.addClip()
-let top = NSColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 1)
-let bottom = NSColor(srgbRed: 0.945, green: 0.945, blue: 0.955, alpha: 1)
-NSGradient(starting: top, ending: bottom)!.draw(in: NSRect(x: 0, y: 0, width: size, height: size), angle: -90)
+NSGraphicsContext.saveGraphicsState()
+NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
-// Три бара: трек во всю рабочую высоту + заполнение снизу с круглыми капами.
-struct Bar { let fill: CGFloat; let color: NSColor }
-let graphite = NSColor(srgbRed: 0.145, green: 0.145, blue: 0.165, alpha: 1)
-let bars: [Bar] = [
-    Bar(fill: 0.45, color: graphite),                                                    // спокойный
-    Bar(fill: 0.78, color: NSColor(srgbRed: 1.00, green: 0.69, blue: 0.25, alpha: 1)),   // warn ≥70
-    Bar(fill: 0.94, color: NSColor(srgbRed: 0.88, green: 0.36, blue: 0.31, alpha: 1)),   // danger ≥90
-]
-let barW: CGFloat = size * 0.132
-let gap: CGFloat = size * 0.096
-let totalW = barW * 3 + gap * 2
-let x0 = (size - totalW) / 2
-let yPad: CGFloat = size * 0.24
-let trackH = size - yPad * 2
+// Небольшой прозрачный край и системное скругление оставляют знаку воздух.
+let tile = NSBezierPath(
+    roundedRect: NSRect(x: 24, y: 24, width: 976, height: 976),
+    xRadius: 220,
+    yRadius: 220
+)
+NSColor(srgbRed: 245 / 255, green: 245 / 255, blue: 247 / 255, alpha: 1).setFill()
+tile.fill()
 
-for (i, bar) in bars.enumerated() {
-    let x = x0 + CGFloat(i) * (barW + gap)
-    // трек — едва заметный, задаёт «шкалу»
-    let track = NSBezierPath(roundedRect: NSRect(x: x, y: yPad, width: barW, height: trackH),
-                             xRadius: barW / 2, yRadius: barW / 2)
-    NSColor(white: 0, alpha: 0.07).setFill()
-    track.fill()
-    // заполнение снизу; минимум = диаметр капа, чтобы форма оставалась пилюлей
-    let h = max(barW, trackH * bar.fill)
-    let fill = NSBezierPath(roundedRect: NSRect(x: x, y: yPad, width: barW, height: h),
-                            xRadius: barW / 2, yRadius: barW / 2)
-    bar.color.setFill()
-    fill.fill()
+let neutral = NSColor(srgbRed: 142 / 255, green: 142 / 255, blue: 147 / 255, alpha: 1)
+let warn = NSColor(srgbRed: 1, green: 176 / 255, blue: 64 / 255, alpha: 1)
+let danger = NSColor(srgbRed: 224 / 255, green: 92 / 255, blue: 79 / 255, alpha: 1)
+
+// Макет задан в привычных экранных координатах (y вниз); AppKit рисует y вверх.
+func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+    NSPoint(x: x, y: size - y)
 }
-_ = ctx // silence unused warning path
-image.unlockFocus()
 
-guard let tiff = image.tiffRepresentation,
-      let rep = NSBitmapImageRep(data: tiff),
-      let png = rep.representation(using: .png, properties: [:]) else { fatalError("png fail") }
+func stroke(from start: NSPoint, to end: NSPoint, width: CGFloat, color: NSColor) {
+    let path = NSBezierPath()
+    path.move(to: start)
+    path.line(to: end)
+    path.lineWidth = width
+    path.lineCapStyle = .round
+    color.setStroke()
+    path.stroke()
+}
+
+// A: нейтральная левая ножка, warn-правая, danger-перекладина чуть ниже центра.
+stroke(from: point(270, 760), to: point(400, 264), width: 112, color: neutral)
+stroke(from: point(400, 264), to: point(530, 760), width: 112, color: warn)
+stroke(from: point(319, 596), to: point(481, 596), width: 76, color: danger)
+
+// I: тот же danger-цвет, что у критического состояния графиков.
+stroke(from: point(730, 276), to: point(730, 760), width: 112, color: danger)
+
+NSGraphicsContext.restoreGraphicsState()
+
+guard let png = rep.representation(using: .png, properties: [:]) else {
+    fatalError("png fail")
+}
 let out = URL(fileURLWithPath: "icon/AppIcon-1024.png")
-try! FileManager.default.createDirectory(atPath: "icon", withIntermediateDirectories: true)
-try! png.write(to: out)
-print("written: \(out.path)")
+try FileManager.default.createDirectory(atPath: "icon", withIntermediateDirectories: true)
+try png.write(to: out)
+print("written: \(out.path) \(rep.pixelsWide)x\(rep.pixelsHigh)")
