@@ -47,8 +47,7 @@ em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 40
 .nav-links a { font-size: 14px; font-weight: 600; color: var(--dim); transition: color .15s; }
 .nav-links a:hover { color: var(--text); }
 .brand { display: inline-flex; align-items: center; gap: 9px; }
-.brand-mark { width: 20px; height: 20px; color: var(--text); }
-.brand-mark .bars-low { fill: var(--amber); }
+.brand-mark { display: block; width: 20px; height: 20px; object-fit: contain; }
 .brand-text { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
 .brand-accent { color: var(--amber-text); }
 .nav-buy {
@@ -208,8 +207,7 @@ em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 40
   border-radius: 999px; padding: 3px 12px; margin-bottom: 12px;
 }
 .price { font-size: 36px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 12px; }
-.price-mark { width: 28px; height: 28px; color: var(--text); }
-.price-mark .bars-low { fill: var(--amber); }
+.price-mark { display: block; width: 28px; height: 28px; object-fit: contain; }
 .price-sub { color: var(--dim); margin: 4px 0 18px; font-size: 15px; }
 .price-card .btn-primary { width: 100%; justify-content: center; }
 .price-meta { color: var(--faint); font-size: 13px; margin: 12px 0 16px; }
