@@ -1,6 +1,7 @@
 // Генератор og.png 1280×640: плоский AI-знак, wordmark и слоган лендинга.
 // Запуск: swift scripts/gen-og.swift → site/assets/og.png
 import AppKit
+import CoreText
 
 let W: CGFloat = 1280, H: CGFloat = 640
 let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(W), pixelsHigh: Int(H),
@@ -39,13 +40,27 @@ stroke(from: point(290, 220), to: point(360, 430), width: 52, color: warn)
 stroke(from: point(250, 355), to: point(330, 355), width: 34, color: danger)
 stroke(from: point(410, 226), to: point(410, 430), width: 52, color: danger)
 
-let wordFont = NSFont.systemFont(ofSize: 90, weight: .medium)
+let scriptDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+let soraURL = scriptDirectory.appendingPathComponent("assets/Sora[wght].ttf")
+var registrationError: Unmanaged<CFError>?
+guard CTFontManagerRegisterFontsForURL(soraURL as CFURL, .process, &registrationError) else {
+    let message = registrationError?.takeRetainedValue().localizedDescription ?? "unknown error"
+    fatalError("could not register Sora for OG rendering: \(message)")
+}
+let weightAxis = NSNumber(value: 0x77676874 as UInt32) // OpenType `wght`
+let wordDescriptor = NSFontDescriptor(fontAttributes: [
+    .name: "Sora",
+    .variation: [weightAxis: NSNumber(value: 500)],
+])
+guard let wordFont = NSFont(descriptor: wordDescriptor, size: 90) else {
+    fatalError("could not create Sora 500")
+}
 let wordAttrs: [NSAttributedString.Key: Any] = [
     .font: wordFont,
     .foregroundColor: graphite,
     .kern: -1.2,
 ]
-let word = NSAttributedString(string: "AI Status Bar", attributes: wordAttrs)
+let word = NSAttributedString(string: "Status Bar", attributes: wordAttrs)
 let wordSize = word.size()
 let wordCenterY: CGFloat = 315
 word.draw(at: NSPoint(x: 490, y: H - wordCenterY - wordSize.height / 2))

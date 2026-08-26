@@ -89,6 +89,20 @@ final class SiteIdentityGeneratorTests: XCTestCase {
         assertPixel(social, x: 410, y: 355, hex: 0xE05C4F)
     }
 
+    func testOpenGraphWordmarkDoesNotRepeatAIFromTheMark() throws {
+        let workspace = try temporaryWorkspace()
+        defer { try? FileManager.default.removeItem(at: workspace) }
+        try FileManager.default.createDirectory(
+            at: workspace.appendingPathComponent("site/assets"),
+            withIntermediateDirectories: true
+        )
+
+        try runScript("gen-og.swift", in: workspace)
+
+        let social = try loadBitmap(workspace.appendingPathComponent("site/assets/og.png"))
+        assertPixel(social, x: 950, y: 320, hex: 0xF5F5F7)
+    }
+
     private func temporaryWorkspace() throws -> URL {
         let workspace = FileManager.default.temporaryDirectory
             .appendingPathComponent("ai-status-bar-site-identity-\(UUID().uuidString)")
