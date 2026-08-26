@@ -2,6 +2,40 @@ import AppKit
 import XCTest
 
 final class SiteIdentityGeneratorTests: XCTestCase {
+    func testEveryWebsiteBrandUsesApprovedSoraStatusBarLockup() throws {
+        let site = repositoryRoot.appendingPathComponent("site")
+        let enumerator = try XCTUnwrap(
+            FileManager.default.enumerator(
+                at: site,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+        )
+        let htmlFiles = enumerator.compactMap { $0 as? URL }.filter {
+            $0.lastPathComponent == "index.html"
+        }
+        XCTAssertFalse(htmlFiles.isEmpty)
+
+        for file in htmlFiles {
+            let html = try String(contentsOf: file, encoding: .utf8)
+            guard html.contains("class=\"brand-text\"") else { continue }
+            XCTAssertTrue(
+                html.contains("<span class=\"brand-text\">Status Bar</span>"),
+                file.path
+            )
+            XCTAssertFalse(html.contains("class=\"brand-accent\""), file.path)
+            XCTAssertTrue(html.contains("family=Sora"), file.path)
+        }
+
+        let css = try String(
+            contentsOf: site.appendingPathComponent("styles.css"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(css.contains("width: 24px; height: 24px"))
+        XCTAssertTrue(css.contains("font-family: \"Sora\""))
+        XCTAssertTrue(css.contains(".nav-links { display: none; }"))
+    }
+
     func testAppIconGeneratorAlsoProducesEveryWebsiteIconSize() throws {
         let workspace = try temporaryWorkspace()
         defer { try? FileManager.default.removeItem(at: workspace) }

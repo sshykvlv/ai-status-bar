@@ -46,10 +46,13 @@ em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 40
 .nav-links { margin-left: auto; margin-right: 18px; }
 .nav-links a { font-size: 14px; font-weight: 600; color: var(--dim); transition: color .15s; }
 .nav-links a:hover { color: var(--text); }
-.brand { display: inline-flex; align-items: center; gap: 9px; }
-.brand-mark { display: block; width: 20px; height: 20px; object-fit: contain; }
-.brand-text { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
-.brand-accent { color: var(--amber-text); }
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+.brand-mark { display: block; width: 24px; height: 24px; object-fit: contain; }
+.brand-text {
+  color: var(--text); font-family: "Sora", -apple-system, system-ui, sans-serif;
+  font-size: 19px; font-weight: 500; line-height: 1;
+  letter-spacing: -0.035em;
+}
 .nav-buy {
   font-size: 14px; font-weight: 600; color: var(--dim);
   border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px;
@@ -245,11 +248,12 @@ em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 40
   display: flex; justify-content: space-between; align-items: center;
   border-top: 1px solid var(--line);
 }
-.brand-sm .brand-text { font-size: 15px; }
+.brand-sm .brand-text { font-size: 16px; }
 .footer-links { display: flex; gap: 18px; color: var(--faint); font-size: 13.5px; }
 .footer-links a:hover { color: var(--text); }
 
 @media (max-width: 760px) {
+  .nav-links { display: none; }
   .bites, .steps, .buy { grid-template-columns: 1fr; }
   .tipbar { flex-direction: column; text-align: center; }
   .hero { padding-top: 40px; }
