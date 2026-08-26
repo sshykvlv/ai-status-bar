@@ -18,7 +18,8 @@ AI Status Bar should be a small, reliable account monitor. Adding and repairing 
 ## Main menu
 
 - Keep the native `NSMenu`, equalizer status icon, compact account rows, threshold colors, and account detail submenus.
-- Keep the menu no wider than its account content; use a 300-point custom row instead of the previous 400-point row.
+- Keep the menu no wider than its account content; use a 260-point custom row that expands across AppKit's final menu width instead of the previous fixed 400-point row.
+- Match account submenu chevrons to the native Settings chevron in weight, contrast, and right alignment.
 - Do not add a column header. The left chip is the 5-hour window and the right chip is the weekly window; native hover help names each one explicitly.
 - Remove the global `Updated HH:mm` row. Freshness belongs to an account and appears only when that account is stale.
 - Do not add `Refresh Now`. The app already polls in the background and immediately when the menu opens.

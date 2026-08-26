@@ -102,7 +102,7 @@ Commit: `git add Sources/AIStatusBar/OAuthFlow.swift Sources/AIStatusBar/main.sw
 
 **Step 1: Write failing presentation tests**
 
-Test the compact 300-point width, per-chip hover labels, accessible account titles, `Session expired`, `Last data retained`, and the absence of CLI instructions and manual-refresh text from the presentation model.
+Test the compact 260-point initial width, expansion across AppKit's final menu width, per-chip hover labels, accessible account titles, `Session expired`, `Last data retained`, and the absence of CLI instructions and manual-refresh text from the presentation model.
 
 Run: `swift test --filter 'MenuPresentationTests|RowRenderTests'`
 Expected: FAIL because the header and presentation helpers do not exist.

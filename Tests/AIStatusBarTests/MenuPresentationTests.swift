@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import AIStatusBar
 
 final class MenuPresentationTests: XCTestCase {
@@ -19,7 +20,18 @@ final class MenuPresentationTests: XCTestCase {
     func testMenuWidthFitsContentWithoutHeaderSlack() {
         let item = MenuRowFactory.item(for: account, state: .pending)
 
-        XCTAssertLessThanOrEqual(item.view?.frame.width ?? .infinity, 300)
+        XCTAssertEqual(item.view?.frame.width, 260)
+    }
+
+    func testAccountRowStretchesAcrossFinalMenuWidth() throws {
+        let item = MenuRowFactory.item(for: account, state: .pending)
+        let row = try XCTUnwrap(item.view)
+        let container = NSView(frame: row.frame)
+        container.addSubview(row)
+
+        container.setFrameSize(NSSize(width: 320, height: row.frame.height))
+
+        XCTAssertEqual(row.frame.width, 320)
     }
 
     func testWindowTooltipsIdentifyBothWindowsWithoutAHeader() {

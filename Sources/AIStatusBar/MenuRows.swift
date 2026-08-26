@@ -90,15 +90,20 @@ struct AccountRowView: View {
             case .ok(let usage, _), .stale(let usage, _, _):
                 windows(usage: usage)
             }
-            // Системную стрелку сабменю view-item не рисует — своя (просьба
-            // владельца 12.07: у пунктов с выпадайкой должна быть стрелка).
+            // Системную стрелку сабменю view-item не рисует — повторяем её своей:
+            // labelColor и 11pt semibold совпадают по контрасту и весу с Settings.
             Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(hovered ? Color.white : Color(nsColor: .tertiaryLabelColor))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(hovered ? Color.white : Color(nsColor: .labelColor))
                 .padding(.leading, 2)
         }
         .padding(.horizontal, 12)
-        .frame(width: MenuRowFactory.rowWidth, height: MenuRowFactory.rowHeight, alignment: .leading)
+        // 260pt задаёт компактную исходную ширину меню. После того как AppKit
+        // добавляет системные поля и колонку сабменю, строка растягивается на всю
+        // получившуюся ширину — подсветка и стрелка доходят до правого края.
+        .frame(minWidth: MenuRowFactory.rowWidth, maxWidth: .infinity,
+               minHeight: MenuRowFactory.rowHeight, maxHeight: MenuRowFactory.rowHeight,
+               alignment: .leading)
         // Нативная подсветка выделения: кастомные view-строки NSMenu сам не
         // подсвечивает — рисуем акцентный rounded-rect с инсетом 5pt, как у
         // системных пунктов; цвет — системный selection (следует за акцентом юзера).
@@ -226,7 +231,7 @@ private struct WindowChip: View {
 }
 
 enum MenuRowFactory {
-    static let rowWidth: CGFloat = 300
+    static let rowWidth: CGFloat = 260
     // Одна текстовая строка 12.5pt + по ~5pt воздуха сверху/снизу (V2-B,
     // выбор владельца 12.07 — ниже и плотнее двухстрочного варианта).
     static let rowHeight: CGFloat = 25
@@ -241,6 +246,7 @@ enum MenuRowFactory {
         // slack in the parent NSMenu window (the "gap after Quit" gotcha). macOS 13+.
         host.sizingOptions = []
         host.frame = NSRect(x: 0, y: 0, width: rowWidth, height: rowHeight)
+        host.autoresizingMask = [.width]
         item.view = host
         // Title у view-item не рисуется (NSMenuItem.view забирает отрисовку),
         // но продолжает питать type-select и VoiceOver — заполняем всегда.
