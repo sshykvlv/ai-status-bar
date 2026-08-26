@@ -69,7 +69,7 @@ final class AccountStore: @unchecked Sendable {
             defaults.set(Array(dismissedBuiltins), forKey: dismissedKey)
         }
         accounts[i].kind = kind
-        accounts[i].email = email
+        if let email { accounts[i].email = email }
         if let plan { accounts[i].plan = plan }
         accounts[i].codexHome = nil
         accounts[i].claudeConfigDir = nil

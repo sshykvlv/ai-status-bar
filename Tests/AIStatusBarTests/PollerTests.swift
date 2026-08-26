@@ -128,6 +128,21 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertEqual(restarted.accounts.map(\.kind), [.claudeOAuth])
     }
 
+    func testReconnectWithoutReturnedIdentityKeepsKnownIdentity() throws {
+        let store = AccountStore(defaults: ephemeralDefaults(),
+                                 hasClaudeMain: { false }, hasCodex: { false })
+        let id = UUID()
+        store.add(Account(id: id, name: "Work", kind: .codex,
+                          email: "known@ykv.lv", plan: "Pro",
+                          codexHome: "/tmp/work-codex"))
+
+        store.migrateToOwned(id: id, kind: .codexOAuth, email: nil, plan: nil)
+
+        let migrated = try XCTUnwrap(store.accounts.first)
+        XCTAssertEqual(migrated.email, "known@ykv.lv")
+        XCTAssertEqual(migrated.plan, "Pro")
+    }
+
     func testRenameAndRemove() {
         let store = AccountStore(defaults: ephemeralDefaults(),
                                  hasClaudeMain: { false }, hasCodex: { false })

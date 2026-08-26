@@ -88,9 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         updatedItem.isEnabled = false
         menu.addItem(updatedItem)
-        addAction("Add Claude Account…", #selector(addAccount))
-        addAction("Add Claude CLI Profile…", #selector(addClaudeProfile))
-        addAction("Add Codex Account…", #selector(addCodexAccount))
+        addAction("Add Account…", #selector(addAccount))
         menu.addItem(.separator())
         let login = addAction("Launch at Login", #selector(toggleLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -127,13 +125,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let rename = NSMenuItem(title: "Rename…", action: #selector(renameAccount(_:)), keyEquivalent: "")
         rename.target = self; rename.representedObject = account.id
         sub.addItem(rename)
-        if account.kind == .claudeOAuth {
-            let relogin = NSMenuItem(title: "Re-login…", action: #selector(reloginAccount(_:)), keyEquivalent: "")
-            relogin.target = self; relogin.representedObject = account.id
-            sub.addItem(relogin)
-        }
+        let relogin = NSMenuItem(title: "Sign in again…", action: #selector(reloginAccount(_:)), keyEquivalent: "")
+        relogin.target = self; relogin.representedObject = account.id
+        sub.addItem(relogin)
         sub.addItem(.separator())
-        let remove = NSMenuItem(title: "Remove", action: #selector(removeAccount(_:)), keyEquivalent: "")
+        let remove = NSMenuItem(title: "Remove Account…", action: #selector(removeAccount(_:)), keyEquivalent: "")
         remove.target = self; remove.representedObject = account.id
         sub.addItem(remove)
     }
@@ -247,63 +243,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: actions
-    @objc private func addAccount() { OAuthFlow.shared.start(store: store) { [weak self] in self?.render() } }
-    @objc private func addCodexAccount() {
-        // Codex-логин делает codex CLI (пишет auth.json в свой CODEX_HOME). Второй аккаунт =
-        // отдельный CODEX_HOME. Даём выбрать его папку; read-only читаем оттуда auth.json.
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.showsHiddenFiles = true
-        panel.message = "Choose a Codex home folder containing auth.json (e.g. ~/.codex, or a second CODEX_HOME you logged into with `codex login`)."
-        panel.prompt = "Add"
+    @objc private func addAccount() {
+        let alert = NSAlert()
+        alert.messageText = "Add Account"
+        alert.informativeText = "Choose a service. Sign-in opens in your browser.\n\nAI Status Bar stores this session separately. Your Claude Code and Codex CLI accounts stay unchanged."
+        alert.addButton(withTitle: AccountProvider.claude.label)
+        alert.addButton(withTitle: AccountProvider.codex.label)
+        alert.addButton(withTitle: "Cancel")
         NSApp.activate(ignoringOtherApps: true)
-        guard panel.runModal() == .OK, let dir = panel.url else { return }
-        let home = dir.path
-        guard let auth = CodexAuth.load(homePath: home) else {
-            let a = NSAlert()
-            a.messageText = "No Codex login found there"
-            a.informativeText = "That folder has no valid auth.json. Run `codex login` (optionally with CODEX_HOME set to this folder) first, then try again."
-            a.runModal()
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            OAuthFlow.shared.start(store: store) { [weak self] in self?.render() }
+        case .alertSecondButtonReturn:
+            CodexOAuthFlow.shared.start(store: store) { [weak self] in self?.render() }
+        default:
             return
         }
-        // Дедуп: не добавлять тот же home, что уже есть (в т.ч. основной ~/.codex).
-        let existingHomes = store.accounts.filter { $0.kind == .codex }
-            .map { $0.codexHome ?? CodexAuth.defaultHomePath }
-        if existingHomes.contains(home) { NSSound.beep(); return }
-        let email = auth.email()
-        store.add(Account(id: UUID(), name: email ?? "Codex", kind: .codex,
-                          email: email, codexHome: home))
-        render()
-    }
-    @objc private func addClaudeProfile() {
-        // Второй Claude-аккаунт живёт в отдельном CLAUDE_CONFIG_DIR; логинит его сам
-        // Claude Code (кладёт креды в Keychain-сервис с hash-суффиксом от пути папки).
-        // Даём выбрать папку профиля; read-only читаем токены из Keychain.
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.showsHiddenFiles = true
-        panel.message = "Choose a Claude config folder (e.g. ~/.claude-max2 — a CLAUDE_CONFIG_DIR you logged into with `claude /login`)."
-        panel.prompt = "Add"
-        NSApp.activate(ignoringOtherApps: true)
-        guard panel.runModal() == .OK, let dir = panel.url else { return }
-        let configDir = dir.path
-        guard KeychainStore.claudeCodeTokens(configDir: configDir) != nil else {
-            let a = NSAlert()
-            a.messageText = "No Claude login found for that profile"
-            a.informativeText = "No Keychain credentials exist for this folder. Run `CLAUDE_CONFIG_DIR=<folder> claude` and `/login` first, then try again."
-            a.runModal()
-            return
-        }
-        // Дедуп по конфиг-папке (nil = основной автоподхваченный ~/.claude).
-        let existingDirs = store.accounts.filter { $0.kind == .claudeMain }.map { $0.claudeConfigDir }
-        if existingDirs.contains(configDir) { NSSound.beep(); return }
-        let name = Account.nextClaudeProfileName(existingConfigDirs: existingDirs)
-        store.add(Account(id: UUID(), name: name, kind: .claudeMain, email: nil, claudeConfigDir: configDir))
-        render()
     }
     @objc private func toggleLogin() {
         let svc = SMAppService.mainApp
@@ -346,11 +301,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     @objc private func reloginAccount(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? UUID else { return }
-        OAuthFlow.shared.start(store: store, reloginID: id) { [weak self] in self?.render() }
+        guard let id = sender.representedObject as? UUID,
+              let account = store.accounts.first(where: { $0.id == id }) else { return }
+        let onDone: () -> Void = { [weak self] in
+            self?.render()
+        }
+        switch AccountActionPolicy.provider(for: account.kind) {
+        case .claude:
+            OAuthFlow.shared.start(store: store, reloginID: id, onDone: onDone)
+        case .codex:
+            CodexOAuthFlow.shared.start(store: store, reloginID: id, onDone: onDone)
+        }
     }
     @objc private func removeAccount(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? UUID else { return }
+        guard let id = sender.representedObject as? UUID,
+              let account = store.accounts.first(where: { $0.id == id }) else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Remove \(AccountRowView.resolvedName(name: account.name, email: account.email))?"
+        alert.informativeText = "AI Status Bar will stop monitoring this account. Your Claude Code and Codex CLI accounts stay unchanged."
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
         store.remove(id: id)
         render()
     }

@@ -118,7 +118,7 @@ final class OAuthFlow {
             return
         }
         guard http.statusCode == 200 else {
-            presentError("Sign-in failed — Anthropic rejected the request (HTTP \(http.statusCode)). Try Add Claude Account again.")
+            presentError("Sign-in failed — Anthropic rejected the request (HTTP \(http.statusCode)). Try signing in again.")
             return
         }
         guard let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -126,7 +126,7 @@ final class OAuthFlow {
               let refresh = d["refresh_token"] as? String,
               let expiresIn = (d["expires_in"] as? NSNumber)?.doubleValue
         else {
-            presentError("Sign-in succeeded but the token response was malformed. Try Add Claude Account again.")
+            presentError("Sign-in succeeded but the token response was malformed. Try signing in again.")
             return
         }
         let tokens = OAuthTokens(accessToken: access, refreshToken: refresh,
@@ -135,6 +135,7 @@ final class OAuthFlow {
         do {
             if let reloginID {
                 try KeychainStore.saveOwn(tokens, accountID: reloginID)
+                store.migrateToOwned(id: reloginID, kind: .claudeOAuth, email: email)
             } else {
                 // Сохраняем токены ДО добавления аккаунта: если Keychain-запись
                 // не удалась, аккаунт не появляется (иначе он завис бы с «re-login»).
@@ -156,7 +157,7 @@ final class OAuthFlow {
     private func presentError(_ message: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Couldn't add Claude account"
+        alert.messageText = "Couldn't sign in to Claude"
         alert.informativeText = message
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
