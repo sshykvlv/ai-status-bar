@@ -17,12 +17,20 @@ struct Usage: Equatable {
     }
 }
 
-enum AccountKind: String, Codable { case claudeMain, claudeOAuth, codex }
+enum AccountKind: String, Codable {
+    case claudeMain
+    case claudeOAuth
+    case codex
+    case codexOAuth
+
+    var isCodex: Bool { self == .codex || self == .codexOAuth }
+    var isOwned: Bool { self == .claudeOAuth || self == .codexOAuth }
+}
 
 struct Account: Codable, Equatable, Identifiable {
     let id: UUID
     var name: String
-    let kind: AccountKind
+    var kind: AccountKind
     var email: String?
     var plan: String? = nil
     /// Для дополнительных Codex-аккаунтов — путь к их CODEX_HOME (папке с auth.json).

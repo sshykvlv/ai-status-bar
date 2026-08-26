@@ -36,7 +36,7 @@ final class RowRenderTests: XCTestCase {
             ("4-stale", AccountRowView(name: "Personal", state: .stale(working, fetchedAt: now, badge: "offline"),
                                        kind: .claudeOAuth, plan: "Max 20x")),
             ("5-pending", AccountRowView(name: "Claude", state: .pending, kind: .claudeMain)),
-            ("6-failed", AccountRowView(name: "Codex", state: .failed(badge: "run codex login"), kind: .codex)),
+            ("6-failed", AccountRowView(name: "Codex", state: .failed(badge: MenuPresentation.authFailureBadge), kind: .codex)),
             // Дефолтное имя + известный email → в identity показывается email (V2-B).
             ("7-default-name-email", AccountRowView(name: "Claude", state: .ok(calm, fetchedAt: now),
                                                     kind: .claudeOAuth, email: "sasha.yakovlev@gmail.com", plan: "Max 20x")),

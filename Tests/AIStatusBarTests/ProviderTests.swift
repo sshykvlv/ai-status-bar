@@ -2,6 +2,34 @@ import XCTest
 @testable import AIStatusBar
 
 final class ProviderTests: XCTestCase {
+    private func jwt(_ payload: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        return "e30.\(data.base64URLEncoded()).sig"
+    }
+
+    private func form(_ request: URLRequest) throws -> [String: String] {
+        let body = try XCTUnwrap(bodyData(request).flatMap { String(data: $0, encoding: .utf8) })
+        let items = URLComponents(string: "?\(body)")?.queryItems ?? []
+        return Dictionary(uniqueKeysWithValues: items.compactMap { item in
+            item.value.map { (item.name, $0) }
+        })
+    }
+
+    private func bodyData(_ request: URLRequest) -> Data? {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var result = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else { break }
+            result.append(buffer, count: count)
+        }
+        return result
+    }
+
     func testOwnTokensRoundtrip() throws {
         let id = UUID()
         defer { KeychainStore.deleteOwn(accountID: id) }
@@ -11,6 +39,21 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(KeychainStore.loadOwn(accountID: id), t)
         KeychainStore.deleteOwn(accountID: id)
         XCTAssertNil(KeychainStore.loadOwn(accountID: id))
+    }
+
+    func testOwnTokensCanBeReplacedAfterRefreshRotation() throws {
+        let id = UUID()
+        defer { KeychainStore.deleteOwn(accountID: id) }
+        let original = OAuthTokens(accessToken: "old-access", refreshToken: "old-refresh",
+                                   expiresAt: Date(timeIntervalSince1970: 1_900_000_000))
+        let rotated = OAuthTokens(accessToken: "new-access", refreshToken: "new-refresh",
+                                  expiresAt: Date(timeIntervalSince1970: 2_000_000_000),
+                                  idToken: "new-identity")
+
+        try KeychainStore.saveOwn(original, accountID: id)
+        try KeychainStore.saveOwn(rotated, accountID: id)
+
+        XCTAssertEqual(KeychainStore.loadOwn(accountID: id), rotated)
     }
 
     // Opt-in: чтение чужой записи "Claude Code-credentials" вызывает блокирующий
@@ -171,8 +214,106 @@ final class ProviderTests: XCTestCase {
             (URLResponse(url: req.url!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil), Data())
         }
         defer { MockURLProtocol.rawHandler = nil }
-        let auth = CodexAuth(accessToken: "a", refreshToken: "r", idToken: nil)
-        do { _ = try await CodexProvider(session: .mocked).refresh(auth); XCTFail() }
+        let tokens = OAuthTokens(accessToken: "a", refreshToken: "r", expiresAt: Date(), idToken: nil)
+        do { _ = try await CodexProvider(session: .mocked).refresh(tokens); XCTFail() }
         catch { XCTAssertEqual(error as? FetchError, .unauthorized) }
+    }
+
+    func testCodexAuthorizationCodeExchangeUsesFormEncoding() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let access = try jwt(["exp": now.addingTimeInterval(3600).timeIntervalSince1970])
+        let id = try jwt([
+            "email": "sasha@ykv.lv",
+            "https://api.openai.com/auth": ["chatgpt_plan_type": "pro"],
+        ])
+        var capturedForm: [String: String]?
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.absoluteString, CodexOAuthConstants.tokenURL)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"),
+                           "application/x-www-form-urlencoded")
+            capturedForm = try? self.form(request)
+            let body = try! JSONSerialization.data(withJSONObject: [
+                "access_token": access,
+                "refresh_token": "refresh-new",
+                "id_token": id,
+            ])
+            return (200, body)
+        }
+
+        let tokens = try await CodexProvider(session: .mocked).exchangeAuthorizationCode(
+            code: "code with spaces", verifier: "verifier/value", now: now)
+
+        XCTAssertEqual(capturedForm, [
+            "grant_type": "authorization_code",
+            "code": "code with spaces",
+            "redirect_uri": CodexOAuthConstants.redirectURI,
+            "client_id": CodexOAuthConstants.clientID,
+            "code_verifier": "verifier/value",
+        ])
+        XCTAssertEqual(tokens.accessToken, access)
+        XCTAssertEqual(tokens.refreshToken, "refresh-new")
+        XCTAssertEqual(tokens.idToken, id)
+        XCTAssertEqual(tokens.expiresAt, now.addingTimeInterval(3600))
+    }
+
+    func testCodexRefreshPersistsEveryRotatedToken() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let access = try jwt(["exp": now.addingTimeInterval(7200).timeIntervalSince1970])
+        let old = OAuthTokens(accessToken: "access-old", refreshToken: "refresh-old",
+                              expiresAt: now, idToken: "identity-old")
+        var capturedFields: [String: String]?
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            if let body = self.bodyData(request) {
+                capturedFields = try? JSONSerialization.jsonObject(with: body) as? [String: String]
+            }
+            let response = try! JSONSerialization.data(withJSONObject: [
+                "access_token": access,
+                "refresh_token": "refresh-new",
+                "id_token": "identity-new",
+            ])
+            return (200, response)
+        }
+
+        let refreshed = try await CodexProvider(session: .mocked).refresh(old, now: now)
+
+        XCTAssertEqual(capturedFields, [
+            "client_id": CodexOAuthConstants.clientID,
+            "grant_type": "refresh_token",
+            "refresh_token": "refresh-old",
+        ])
+        XCTAssertEqual(refreshed.accessToken, access)
+        XCTAssertEqual(refreshed.refreshToken, "refresh-new")
+        XCTAssertEqual(refreshed.idToken, "identity-new")
+        XCTAssertEqual(refreshed.expiresAt, now.addingTimeInterval(7200))
+    }
+
+    func testCodexRefreshKeepsTokensOmittedByResponse() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let access = try jwt(["exp": now.addingTimeInterval(1800).timeIntervalSince1970])
+        let old = OAuthTokens(accessToken: "access-old", refreshToken: "refresh-old",
+                              expiresAt: now, idToken: "identity-old")
+        MockURLProtocol.handler = { _ in
+            let response = try! JSONSerialization.data(withJSONObject: ["access_token": access])
+            return (200, response)
+        }
+
+        let refreshed = try await CodexProvider(session: .mocked).refresh(old, now: now)
+
+        XCTAssertEqual(refreshed.refreshToken, "refresh-old")
+        XCTAssertEqual(refreshed.idToken, "identity-old")
+    }
+
+    func testCodexJWTReadsIdentityPlanAndExpiration() throws {
+        let expiry = Date(timeIntervalSince1970: 1_900_000_000)
+        let token = try jwt([
+            "exp": expiry.timeIntervalSince1970,
+            "https://api.openai.com/profile": ["email": "profile@ykv.lv"],
+            "https://api.openai.com/auth": ["chatgpt_plan_type": "plus"],
+        ])
+
+        XCTAssertEqual(CodexJWT.email(token), "profile@ykv.lv")
+        XCTAssertEqual(CodexJWT.plan(token), "Plus")
+        XCTAssertEqual(CodexJWT.expiration(token), expiry)
     }
 }

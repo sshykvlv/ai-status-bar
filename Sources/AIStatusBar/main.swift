@@ -8,7 +8,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var store: AccountStore!
     private var poller: Poller!
     private let menu = NSMenu()
-    private let updatedItem = NSMenuItem(title: "Updated —", action: nil, keyEquivalent: "")
     private var appearanceObservation: NSKeyValueObservation?
     private var wakeObserver: NSObjectProtocol?
 
@@ -33,6 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         renderIcon()
         poller.start()
         Updates.check(announce: false)
+        if MockData.enabled,
+           ProcessInfo.processInfo.environment["AISTATUSBAR_OPEN_MENU"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.statusItem.button?.performClick(nil)
+            }
+        }
 
         // Colored (non-template) icons don't auto-retint on light/dark switch like
         // template images do — re-render whenever the effective appearance changes.
@@ -86,20 +91,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        updatedItem.isEnabled = false
-        menu.addItem(updatedItem)
-        addAction("Add Claude Account…", #selector(addAccount))
-        addAction("Add Claude CLI Profile…", #selector(addClaudeProfile))
-        addAction("Add Codex Account…", #selector(addCodexAccount))
+        addAction(MenuPresentation.topLevelActionTitles[0], #selector(addAccount))
         menu.addItem(.separator())
-        let login = addAction("Launch at Login", #selector(toggleLogin))
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        let alerts = addAction("Usage Alerts", #selector(toggleUsageAlerts))
-        alerts.state = UserDefaults.standard.bool(forKey: Self.usageAlertsKey) ? .on : .off
-        addAction("Check for Updates…", #selector(checkUpdates))
-        addAction("View on GitHub", #selector(openRepo))
+        let settings = NSMenuItem(title: MenuPresentation.topLevelActionTitles[1], action: nil,
+                                  keyEquivalent: "")
+        settings.submenu = settingsSubmenu()
+        menu.addItem(settings)
+        addAction(MenuPresentation.topLevelActionTitles[2], #selector(showAbout))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit AI Status Bar",
+        menu.addItem(NSMenuItem(title: MenuPresentation.topLevelActionTitles[3],
                                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
@@ -109,6 +109,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.target = self
         menu.addItem(item)
         return item
+    }
+
+    private func settingsSubmenu() -> NSMenu {
+        let submenu = NSMenu()
+        let login = NSMenuItem(title: MenuPresentation.settingsActionTitles[0],
+                               action: #selector(toggleLogin), keyEquivalent: "")
+        login.target = self
+        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        submenu.addItem(login)
+
+        let alerts = NSMenuItem(title: MenuPresentation.settingsActionTitles[1],
+                                action: #selector(toggleUsageAlerts), keyEquivalent: "")
+        alerts.target = self
+        alerts.state = UserDefaults.standard.bool(forKey: Self.usageAlertsKey) ? .on : .off
+        submenu.addItem(alerts)
+
+        submenu.addItem(.separator())
+        let updates = NSMenuItem(title: MenuPresentation.settingsActionTitles[2],
+                                 action: #selector(checkUpdates), keyEquivalent: "")
+        updates.target = self
+        submenu.addItem(updates)
+        return submenu
     }
 
     private func accountSubmenu(_ account: Account) -> NSMenu {
@@ -127,13 +149,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let rename = NSMenuItem(title: "Rename…", action: #selector(renameAccount(_:)), keyEquivalent: "")
         rename.target = self; rename.representedObject = account.id
         sub.addItem(rename)
-        if account.kind == .claudeOAuth {
-            let relogin = NSMenuItem(title: "Re-login…", action: #selector(reloginAccount(_:)), keyEquivalent: "")
-            relogin.target = self; relogin.representedObject = account.id
-            sub.addItem(relogin)
-        }
+        let relogin = NSMenuItem(title: "Sign in again…", action: #selector(reloginAccount(_:)), keyEquivalent: "")
+        relogin.target = self; relogin.representedObject = account.id
+        sub.addItem(relogin)
         sub.addItem(.separator())
-        let remove = NSMenuItem(title: "Remove", action: #selector(removeAccount(_:)), keyEquivalent: "")
+        let remove = NSMenuItem(title: "Remove Account…", action: #selector(removeAccount(_:)), keyEquivalent: "")
         remove.target = self; remove.representedObject = account.id
         sub.addItem(remove)
     }
@@ -147,24 +167,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // «Claude Code»). Identity — контрастная, сервис · тариф — вторичным.
         let identity = AccountRowView.resolvedName(name: account.name, email: account.email)
         sub.addItem(infoItem(identity, color: .labelColor, semiboldPrefix: identity))
-        let service = account.kind == .codex ? "Codex" : "Claude Code"
+        let service = account.kind.isCodex ? "Codex" : "Claude Code"
         sub.addItem(infoItem(account.plan.map { "\(service) · \($0)" } ?? service, color: .secondaryLabelColor))
         sub.addItem(.separator())
 
         switch poller.state(for: account.id) {
         case .pending:
-            sub.addItem(infoItem("Loading…", color: .secondaryLabelColor))
+            addStatusLines(sub, state: .pending)
             sub.addItem(.separator())
         case .failed(let badge):
-            sub.addItem(infoItem(badge, color: .asbWarn))
+            addStatusLines(sub, state: .failed(badge: badge))
             sub.addItem(.separator())
-        case .ok(let usage, _), .stale(let usage, _, _):
+        case .ok(let usage, _):
             addWindowDetails(sub, title: "5-hour window", window: usage.fiveHour)
             addWindowDetails(sub, title: "Weekly window", window: usage.sevenDay)
-            if case .stale(_, _, let badge) = poller.state(for: account.id) {
-                sub.addItem(infoItem("⚠ \(badge)", color: .asbWarn))
-            }
             sub.addItem(.separator())
+        case .stale(let usage, let fetchedAt, let badge):
+            addWindowDetails(sub, title: "5-hour window", window: usage.fiveHour)
+            addWindowDetails(sub, title: "Weekly window", window: usage.sevenDay)
+            addStatusLines(sub, state: .stale(usage, fetchedAt: fetchedAt, badge: badge))
+            sub.addItem(.separator())
+        }
+    }
+
+    private func addStatusLines(_ sub: NSMenu, state: AccountState) {
+        let lines = MenuPresentation.statusLines(for: state)
+        let isWarning: Bool
+        switch state {
+        case .failed, .stale: isWarning = true
+        case .pending, .ok: isWarning = false
+        }
+        for (index, line) in lines.enumerated() {
+            let warningTitle = isWarning && index == 0 ? "⚠ \(line)" : line
+            sub.addItem(infoItem(warningTitle,
+                                 color: isWarning && index == 0 ? .asbWarn : .secondaryLabelColor))
         }
     }
 
@@ -212,8 +248,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             rebuildMenu()
         }
         renderIcon()
-        let f = DateFormatter(); f.timeStyle = .short
-        updatedItem.title = "Updated \(f.string(from: Date()))"
     }
 
     /// Обновляет открытое меню без removeAllItems: та же геометрия, свежие данные.
@@ -222,8 +256,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let id = item.representedObject as? UUID,
                   let account = store.accounts.first(where: { $0.id == id }),
                   let host = item.view as? NSHostingView<AccountRowView> else { continue }
+            let accessibilityTitle = MenuPresentation.accessibilityTitle(
+                account: account, state: poller.state(for: id))
             host.rootView = AccountRowView(name: account.name, state: poller.state(for: id),
-                                           kind: account.kind, email: account.email, plan: account.plan)
+                                           kind: account.kind, email: account.email, plan: account.plan,
+                                           accessibilityTitle: accessibilityTitle)
+            item.title = accessibilityTitle
         }
     }
 
@@ -247,63 +285,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: actions
-    @objc private func addAccount() { OAuthFlow.shared.start(store: store) { [weak self] in self?.render() } }
-    @objc private func addCodexAccount() {
-        // Codex-логин делает codex CLI (пишет auth.json в свой CODEX_HOME). Второй аккаунт =
-        // отдельный CODEX_HOME. Даём выбрать его папку; read-only читаем оттуда auth.json.
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.showsHiddenFiles = true
-        panel.message = "Choose a Codex home folder containing auth.json (e.g. ~/.codex, or a second CODEX_HOME you logged into with `codex login`)."
-        panel.prompt = "Add"
+    @objc private func addAccount() {
+        let alert = NSAlert()
+        alert.messageText = "Add Account"
+        alert.informativeText = "Choose a service. Sign-in opens in your browser.\n\nAI Status Bar stores this session separately. Your Claude Code and Codex CLI accounts stay unchanged."
+        alert.addButton(withTitle: AccountProvider.claude.label)
+        alert.addButton(withTitle: AccountProvider.codex.label)
+        alert.addButton(withTitle: "Cancel")
         NSApp.activate(ignoringOtherApps: true)
-        guard panel.runModal() == .OK, let dir = panel.url else { return }
-        let home = dir.path
-        guard let auth = CodexAuth.load(homePath: home) else {
-            let a = NSAlert()
-            a.messageText = "No Codex login found there"
-            a.informativeText = "That folder has no valid auth.json. Run `codex login` (optionally with CODEX_HOME set to this folder) first, then try again."
-            a.runModal()
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            OAuthFlow.shared.start(store: store) { [weak self] in self?.render() }
+        case .alertSecondButtonReturn:
+            CodexOAuthFlow.shared.start(store: store) { [weak self] in self?.render() }
+        default:
             return
         }
-        // Дедуп: не добавлять тот же home, что уже есть (в т.ч. основной ~/.codex).
-        let existingHomes = store.accounts.filter { $0.kind == .codex }
-            .map { $0.codexHome ?? CodexAuth.defaultHomePath }
-        if existingHomes.contains(home) { NSSound.beep(); return }
-        let email = auth.email()
-        store.add(Account(id: UUID(), name: email ?? "Codex", kind: .codex,
-                          email: email, codexHome: home))
-        render()
-    }
-    @objc private func addClaudeProfile() {
-        // Второй Claude-аккаунт живёт в отдельном CLAUDE_CONFIG_DIR; логинит его сам
-        // Claude Code (кладёт креды в Keychain-сервис с hash-суффиксом от пути папки).
-        // Даём выбрать папку профиля; read-only читаем токены из Keychain.
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.showsHiddenFiles = true
-        panel.message = "Choose a Claude config folder (e.g. ~/.claude-max2 — a CLAUDE_CONFIG_DIR you logged into with `claude /login`)."
-        panel.prompt = "Add"
-        NSApp.activate(ignoringOtherApps: true)
-        guard panel.runModal() == .OK, let dir = panel.url else { return }
-        let configDir = dir.path
-        guard KeychainStore.claudeCodeTokens(configDir: configDir) != nil else {
-            let a = NSAlert()
-            a.messageText = "No Claude login found for that profile"
-            a.informativeText = "No Keychain credentials exist for this folder. Run `CLAUDE_CONFIG_DIR=<folder> claude` and `/login` first, then try again."
-            a.runModal()
-            return
-        }
-        // Дедуп по конфиг-папке (nil = основной автоподхваченный ~/.claude).
-        let existingDirs = store.accounts.filter { $0.kind == .claudeMain }.map { $0.claudeConfigDir }
-        if existingDirs.contains(configDir) { NSSound.beep(); return }
-        let name = Account.nextClaudeProfileName(existingConfigDirs: existingDirs)
-        store.add(Account(id: UUID(), name: name, kind: .claudeMain, email: nil, claudeConfigDir: configDir))
-        render()
     }
     @objc private func toggleLogin() {
         let svc = SMAppService.mainApp
@@ -327,8 +324,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         rebuildMenu()
     }
     @objc private func checkUpdates() { Updates.check(announce: true) }
-    @objc private func openRepo() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/sshykvlv/ai-status-bar")!)
+    @objc private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
     }
     @objc private func renameAccount(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? UUID,
@@ -346,11 +344,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     @objc private func reloginAccount(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? UUID else { return }
-        OAuthFlow.shared.start(store: store, reloginID: id) { [weak self] in self?.render() }
+        guard let id = sender.representedObject as? UUID,
+              let account = store.accounts.first(where: { $0.id == id }) else { return }
+        let onDone: () -> Void = { [weak self] in
+            self?.render()
+        }
+        switch AccountActionPolicy.provider(for: account.kind) {
+        case .claude:
+            OAuthFlow.shared.start(store: store, reloginID: id, onDone: onDone)
+        case .codex:
+            CodexOAuthFlow.shared.start(store: store, reloginID: id, onDone: onDone)
+        }
     }
     @objc private func removeAccount(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? UUID else { return }
+        guard let id = sender.representedObject as? UUID,
+              let account = store.accounts.first(where: { $0.id == id }) else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Remove \(AccountRowView.resolvedName(name: account.name, email: account.email))?"
+        alert.informativeText = "AI Status Bar will stop monitoring this account. Your Claude Code and Codex CLI accounts stay unchanged."
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
         store.remove(id: id)
         render()
     }

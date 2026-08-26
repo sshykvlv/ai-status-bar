@@ -86,6 +86,63 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertEqual(store2.accounts.first(where: { $0.id == id })?.name, "Extra")
     }
 
+    func testMigratingBuiltinCodexPreservesRowAndPreventsRediscovery() throws {
+        let defaults = ephemeralDefaults()
+        let store = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { true })
+        let original = try XCTUnwrap(store.accounts.first(where: { $0.kind == .codex }))
+        let originalIndex = try XCTUnwrap(store.accounts.firstIndex(where: { $0.id == original.id }))
+
+        store.migrateToOwned(id: original.id, kind: .codexOAuth,
+                             email: "sasha@ykv.lv", plan: "Pro")
+
+        let migrated = try XCTUnwrap(store.accounts.first(where: { $0.id == original.id }))
+        XCTAssertEqual(migrated.name, original.name)
+        XCTAssertEqual(migrated.kind, .codexOAuth)
+        XCTAssertEqual(migrated.email, "sasha@ykv.lv")
+        XCTAssertEqual(migrated.plan, "Pro")
+        XCTAssertNil(migrated.codexHome)
+        XCTAssertEqual(store.accounts.firstIndex(where: { $0.id == original.id }), originalIndex)
+        XCTAssertTrue(store.dismissedBuiltins.contains(AccountKind.codex.rawValue))
+
+        let restarted = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { true })
+        XCTAssertEqual(restarted.accounts.filter { $0.kind == .codexOAuth }.count, 1)
+        XCTAssertFalse(restarted.accounts.contains { $0.kind == .codex })
+    }
+
+    func testMigratingBuiltinClaudePreservesRowAndPreventsRediscovery() throws {
+        let defaults = ephemeralDefaults()
+        let store = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false })
+        let original = try XCTUnwrap(store.accounts.first)
+
+        store.migrateToOwned(id: original.id, kind: .claudeOAuth,
+                             email: "sasha@ykv.lv", plan: "Max")
+
+        let migrated = try XCTUnwrap(store.accounts.first)
+        XCTAssertEqual(migrated.id, original.id)
+        XCTAssertEqual(migrated.name, original.name)
+        XCTAssertEqual(migrated.kind, .claudeOAuth)
+        XCTAssertNil(migrated.claudeConfigDir)
+        XCTAssertTrue(store.dismissedBuiltins.contains(AccountKind.claudeMain.rawValue))
+
+        let restarted = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false })
+        XCTAssertEqual(restarted.accounts.map(\.kind), [.claudeOAuth])
+    }
+
+    func testReconnectWithoutReturnedIdentityKeepsKnownIdentity() throws {
+        let store = AccountStore(defaults: ephemeralDefaults(),
+                                 hasClaudeMain: { false }, hasCodex: { false })
+        let id = UUID()
+        store.add(Account(id: id, name: "Work", kind: .codex,
+                          email: "known@ykv.lv", plan: "Pro",
+                          codexHome: "/tmp/work-codex"))
+
+        store.migrateToOwned(id: id, kind: .codexOAuth, email: nil, plan: nil)
+
+        let migrated = try XCTUnwrap(store.accounts.first)
+        XCTAssertEqual(migrated.email, "known@ykv.lv")
+        XCTAssertEqual(migrated.plan, "Pro")
+    }
+
     func testRenameAndRemove() {
         let store = AccountStore(defaults: ephemeralDefaults(),
                                  hasClaudeMain: { false }, hasCodex: { false })

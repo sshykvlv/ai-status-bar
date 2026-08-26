@@ -7,6 +7,7 @@ struct AccountRowView: View {
     let kind: AccountKind
     var email: String? = nil
     var plan: String? = nil
+    var accessibilityTitle: String? = nil
 
     @State private var hovered = false
 
@@ -18,14 +19,14 @@ struct AccountRowView: View {
     private var serviceSuffix: String {
         switch kind {
         case .claudeMain, .claudeOAuth: return "Claude"
-        case .codex: return "Codex"
+        case .codex, .codexOAuth: return "Codex"
         }
     }
 
     private var serviceLabel: String {
         switch kind {
         case .claudeMain, .claudeOAuth: return "Claude Code"
-        case .codex: return "Codex"
+        case .codex, .codexOAuth: return "Codex"
         }
     }
 
@@ -83,20 +84,26 @@ struct AccountRowView: View {
             case .pending:
                 windows(usage: nil)
             case .failed(let badge):
-                Label(badge, systemImage: "exclamationmark.triangle")
+                Label(MenuPresentation.statusLines(for: .failed(badge: badge)).first ?? badge,
+                      systemImage: "exclamationmark.triangle")
                     .font(.system(size: 11)).foregroundStyle(.orange)
             case .ok(let usage, _), .stale(let usage, _, _):
                 windows(usage: usage)
             }
-            // Системную стрелку сабменю view-item не рисует — своя (просьба
-            // владельца 12.07: у пунктов с выпадайкой должна быть стрелка).
+            // Системную стрелку сабменю view-item не рисует — повторяем её своей:
+            // labelColor и 11pt semibold совпадают по контрасту и весу с Settings.
             Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(hovered ? Color.white : Color(nsColor: .tertiaryLabelColor))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(hovered ? Color.white : Color(nsColor: .labelColor))
                 .padding(.leading, 2)
         }
         .padding(.horizontal, 12)
-        .frame(width: MenuRowFactory.rowWidth, height: MenuRowFactory.rowHeight, alignment: .leading)
+        // 260pt задаёт компактную исходную ширину меню. После того как AppKit
+        // добавляет системные поля и колонку сабменю, строка растягивается на всю
+        // получившуюся ширину — подсветка и стрелка доходят до правого края.
+        .frame(minWidth: MenuRowFactory.rowWidth, maxWidth: .infinity,
+               minHeight: MenuRowFactory.rowHeight, maxHeight: MenuRowFactory.rowHeight,
+               alignment: .leading)
         // Нативная подсветка выделения: кастомные view-строки NSMenu сам не
         // подсвечивает — рисуем акцентный rounded-rect с инсетом 5pt, как у
         // системных пунктов; цвет — системный selection (следует за акцентом юзера).
@@ -107,6 +114,8 @@ struct AccountRowView: View {
                 .padding(.horizontal, 5)
         )
         .onHover { hovered = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilityTitle ?? resolvedName))
     }
 
     // Дизайн «F2 — раздельные плашки» (выбор владельца 12.07, эволюция «D2 — только
@@ -120,8 +129,8 @@ struct AccountRowView: View {
     @ViewBuilder
     private func windows(usage: Usage?) -> some View {
         HStack(spacing: 6) {
-            WindowChip(window: usage?.fiveHour, hovered: hovered)
-            WindowChip(window: usage?.sevenDay, hovered: hovered)
+            WindowChip(title: "5-hour window", window: usage?.fiveHour, hovered: hovered)
+            WindowChip(title: "Weekly window", window: usage?.sevenDay, hovered: hovered)
         }
         // Кластер окон не сжимается — при длинной identity усекается она, не цифры.
         .layoutPriority(1)
@@ -154,6 +163,7 @@ enum ResetClock {
 /// `window == nil` — «—». Форма — скруглённый прямоугольник (не капсула),
 /// заливка quaternary — как системные чипы.
 private struct WindowChip: View {
+    let title: String
     let window: UsageWindow?
     var hovered: Bool = false
 
@@ -216,28 +226,31 @@ private struct WindowChip: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(hovered ? Color.white.opacity(0.18) : Self.chipFill)
         )
+        .help(MenuPresentation.windowTooltip(title: title, window: window))
     }
 }
 
 enum MenuRowFactory {
-    static let rowWidth: CGFloat = 400
+    static let rowWidth: CGFloat = 260
     // Одна текстовая строка 12.5pt + по ~5pt воздуха сверху/снизу (V2-B,
     // выбор владельца 12.07 — ниже и плотнее двухстрочного варианта).
     static let rowHeight: CGFloat = 25
-
     static func item(for account: Account, state: AccountState) -> NSMenuItem {
         let item = NSMenuItem()
+        let accessibilityTitle = MenuPresentation.accessibilityTitle(account: account, state: state)
         let row = AccountRowView(name: account.name, state: state, kind: account.kind,
-                                  email: account.email, plan: account.plan)
+                                 email: account.email, plan: account.plan,
+                                 accessibilityTitle: accessibilityTitle)
         let host = NSHostingView(rootView: row)
         // Disable NSHostingView's own intrinsic-size layout so it can't leave stale sizing
         // slack in the parent NSMenu window (the "gap after Quit" gotcha). macOS 13+.
         host.sizingOptions = []
         host.frame = NSRect(x: 0, y: 0, width: rowWidth, height: rowHeight)
+        host.autoresizingMask = [.width]
         item.view = host
         // Title у view-item не рисуется (NSMenuItem.view забирает отрисовку),
         // но продолжает питать type-select и VoiceOver — заполняем всегда.
-        item.title = account.name
+        item.title = accessibilityTitle
         item.representedObject = account.id
         return item
     }

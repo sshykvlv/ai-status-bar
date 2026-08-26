@@ -34,11 +34,12 @@ enum MockData {
                                        projectedExhaustion: now.addingTimeInterval(2 * 3600)),
                 sevenDay: UsageWindow(utilization: 18, resetsAt: now.addingTimeInterval(4.8 * 86400))
             ), fetchedAt: now)
-        default:               // спокойный + жёлтая зона недельного
-            return .ok(Usage(
+        default:               // сохранённые данные + истёкшая app-owned сессия
+            return .stale(Usage(
                 fiveHour: UsageWindow(utilization: 8, resetsAt: now.addingTimeInterval(4.6 * 3600)),
                 sevenDay: UsageWindow(utilization: 74, resetsAt: now.addingTimeInterval(1.9 * 86400))
-            ), fetchedAt: now)
+            ), fetchedAt: now.addingTimeInterval(-12 * 60),
+                          badge: MenuPresentation.authFailureBadge)
         }
     }
 }
