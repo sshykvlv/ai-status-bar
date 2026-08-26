@@ -9,7 +9,7 @@ AI Status Bar should be a small, reliable account monitor. Adding and repairing 
 
 ## Product contract
 
-1. The main menu shows compact account rows with explicit `Account`, `5h`, and `Week` column labels.
+1. The main menu shows compact account rows without a header row. Each usage chip identifies its window on hover.
 2. There is one `Add Account…` action. It asks for Claude or Codex, explains that browser sign-in opens next, and states that CLI accounts are not changed.
 3. Both providers use browser OAuth. New sessions are stored by AI Status Bar in macOS Keychain and refreshed by AI Status Bar.
 4. Existing CLI-backed accounts remain readable. `Sign in again…` converts the selected row to app-owned credentials while preserving its UUID, name, order, and retained usage data.
@@ -18,7 +18,8 @@ AI Status Bar should be a small, reliable account monitor. Adding and repairing 
 ## Main menu
 
 - Keep the native `NSMenu`, equalizer status icon, compact account rows, threshold colors, and account detail submenus.
-- Add a noninteractive header row: `ACCOUNT`, `5H`, `WEEK`.
+- Keep the menu no wider than its account content; use a 340-point custom row instead of the previous 400-point row.
+- Do not add a column header. The left chip is the 5-hour window and the right chip is the weekly window; native hover help names each one explicitly.
 - Remove the global `Updated HH:mm` row. Freshness belongs to an account and appears only when that account is stale.
 - Do not add `Refresh Now`. The app already polls in the background and immediately when the menu opens.
 - Replace the three provider/source-specific add actions with one `Add Account…`.
@@ -59,4 +60,3 @@ Use Codex's browser PKCE flow with a loopback callback. Persist access token, re
 - Do not import, copy, or rewrite CLI refresh tokens during migration.
 - Do not remove legacy account discovery in this release.
 - Do not add manual refresh, account-folder pickers, or background daemons.
-

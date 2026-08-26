@@ -6,7 +6,6 @@ final class MenuPresentationTests: XCTestCase {
                                   email: "sasha@ykv.lv", plan: "Pro")
 
     func testApprovedMenuHierarchyHasNoManualRefreshOrLegacyAddActions() {
-        XCTAssertEqual(MenuPresentation.columnLabels, ["ACCOUNT", "5H", "WEEK"])
         XCTAssertEqual(MenuPresentation.topLevelActionTitles,
                        ["Add Account…", "Settings", "About AI Status Bar", "Quit AI Status Bar"])
         XCTAssertEqual(MenuPresentation.settingsActionTitles,
@@ -15,6 +14,22 @@ final class MenuPresentationTests: XCTestCase {
         let all = MenuPresentation.topLevelActionTitles + MenuPresentation.settingsActionTitles
         XCTAssertFalse(all.contains { $0.localizedCaseInsensitiveContains("refresh") })
         XCTAssertFalse(all.contains { $0.contains("CLI Profile") || $0.contains("Codex Account") })
+    }
+
+    func testMenuWidthFitsContentWithoutHeaderSlack() {
+        XCTAssertEqual(MenuRowFactory.rowWidth, 340)
+    }
+
+    func testWindowTooltipsIdentifyBothWindowsWithoutAHeader() {
+        let fiveHour = UsageWindow(utilization: 42, resetsAt: nil)
+        let weekly = UsageWindow(utilization: 18, resetsAt: nil)
+
+        XCTAssertEqual(MenuPresentation.windowTooltip(title: "5-hour window", window: fiveHour),
+                       "5-hour window · 42% used")
+        XCTAssertEqual(MenuPresentation.windowTooltip(title: "Weekly window", window: weekly),
+                       "Weekly window · 18% used")
+        XCTAssertEqual(MenuPresentation.windowTooltip(title: "Weekly window", window: nil),
+                       "Weekly window · no data")
     }
 
     func testExpiredStaleAccountRetainsLastDataLanguage() {

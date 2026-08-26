@@ -14,17 +14,19 @@ Or download `AIStatusBar.zip` from [Releases](https://github.com/sshykvlv/ai-sta
 
 ## Usage
 
-Your primary Claude Code account and Codex (`~/.codex`) are detected automatically — nothing to configure.
+Your existing Claude Code and Codex accounts are detected automatically so an upgrade does not lose any rows.
 
 On first launch macOS will ask to allow access to the "Claude Code-credentials" Keychain item — that's the app reading your existing Claude Code login (read-only, see Privacy below) to show its usage. Click **Always Allow** and you're set.
 
-Add a second Claude account via **Add Claude Account…** in the menu — it opens a browser login, no cookie pasting.
+Use **Add Account…**, choose Claude or Codex, and finish sign-in in your browser. AI Status Bar stores that session separately in macOS Keychain, refreshes it automatically, and never changes which account Claude Code or Codex CLI uses.
+
+If an older CLI-backed row expires, open its submenu and choose **Sign in again…**. The row keeps its name and position, then becomes app-owned so it no longer depends on a CLI folder or login.
 
 The icon is a mini equalizer: one bar per account. The fill shows how much you've used; a bar turns orange when usage crosses 70% and red at 90%.
 
 ## Privacy
 
-All requests go directly from your Mac to Anthropic and OpenAI. No servers, no telemetry. OAuth tokens live only in your macOS Keychain; the Claude Code and Codex credentials are read locally, read-only.
+All requests go directly from your Mac to Anthropic and OpenAI. No servers, no telemetry. New OAuth sessions live only in your macOS Keychain. Existing Claude Code and Codex credentials are read locally as a compatibility layer; AI Status Bar never writes or refreshes them.
 
 ## Credits
 

@@ -32,6 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         renderIcon()
         poller.start()
         Updates.check(announce: false)
+        if MockData.enabled,
+           ProcessInfo.processInfo.environment["AISTATUSBAR_OPEN_MENU"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.statusItem.button?.performClick(nil)
+            }
+        }
 
         // Colored (non-template) icons don't auto-retint on light/dark switch like
         // template images do — re-render whenever the effective appearance changes.
@@ -79,9 +85,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func rebuildMenu() {
         menu.removeAllItems()
-        if !store.accounts.isEmpty {
-            menu.addItem(MenuRowFactory.headerItem())
-        }
         for account in store.accounts {
             let item = MenuRowFactory.item(for: account, state: poller.state(for: account.id))
             item.submenu = accountSubmenu(account)

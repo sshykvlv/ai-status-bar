@@ -1,7 +1,6 @@
 import Foundation
 
 enum MenuPresentation {
-    static let columnLabels = ["ACCOUNT", "5H", "WEEK"]
     static let topLevelActionTitles = [
         "Add Account…",
         "Settings",
@@ -17,6 +16,11 @@ enum MenuPresentation {
 
     static func authFailureBadge(for kind: AccountKind) -> String {
         authFailureBadge
+    }
+
+    static func windowTooltip(title: String, window: UsageWindow?) -> String {
+        guard let window else { return "\(title) · no data" }
+        return "\(title) · \(Int(window.utilization))% used"
     }
 
     static func statusLines(for state: AccountState, now: Date = .now) -> [String] {

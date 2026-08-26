@@ -102,14 +102,14 @@ Commit: `git add Sources/AIStatusBar/OAuthFlow.swift Sources/AIStatusBar/main.sw
 
 **Step 1: Write failing presentation tests**
 
-Test header labels, accessible account titles, `Session expired`, `Last data retained`, and the absence of CLI instructions and manual-refresh text from the presentation model.
+Test the compact 340-point width, per-chip hover labels, accessible account titles, `Session expired`, `Last data retained`, and the absence of CLI instructions and manual-refresh text from the presentation model.
 
 Run: `swift test --filter 'MenuPresentationTests|RowRenderTests'`  
 Expected: FAIL because the header and presentation helpers do not exist.
 
 **Step 2: Implement the menu**
 
-Add the `ACCOUNT / 5H / WEEK` header, remove `Updated HH:mm`, keep no `Refresh Now`, move settings into a submenu, add `About AI Status Bar`, and render per-account stale/auth language with richer VoiceOver titles.
+Remove the column header and `Updated HH:mm`, keep no `Refresh Now`, narrow the row to its content, add explicit 5-hour/weekly hover help, move settings into a submenu, add `About AI Status Bar`, and render per-account stale/auth language with richer VoiceOver titles.
 
 **Step 3: Verify and commit**
 
@@ -144,4 +144,3 @@ Expected: the actual menu matches the approved hierarchy and account states.
 Capture the real mock-mode menu to `~/Downloads`, inspect it at original resolution, then commit docs and any final test-safe polish.
 
 Commit: `git add README.md docs/superpowers/specs/2026-08-26-unified-account-ux.md docs/superpowers/plans/2026-08-26-unified-account-ux.md && git commit -m "docs: explain reliable account ownership"`
-

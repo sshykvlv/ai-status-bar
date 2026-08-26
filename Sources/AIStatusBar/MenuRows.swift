@@ -124,8 +124,8 @@ struct AccountRowView: View {
     @ViewBuilder
     private func windows(usage: Usage?) -> some View {
         HStack(spacing: 6) {
-            WindowChip(window: usage?.fiveHour, hovered: hovered)
-            WindowChip(window: usage?.sevenDay, hovered: hovered)
+            WindowChip(title: "5-hour window", window: usage?.fiveHour, hovered: hovered)
+            WindowChip(title: "Weekly window", window: usage?.sevenDay, hovered: hovered)
         }
         // Кластер окон не сжимается — при длинной identity усекается она, не цифры.
         .layoutPriority(1)
@@ -158,6 +158,7 @@ enum ResetClock {
 /// `window == nil` — «—». Форма — скруглённый прямоугольник (не капсула),
 /// заливка quaternary — как системные чипы.
 private struct WindowChip: View {
+    let title: String
     let window: UsageWindow?
     var hovered: Bool = false
 
@@ -220,27 +221,15 @@ private struct WindowChip: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(hovered ? Color.white.opacity(0.18) : Self.chipFill)
         )
+        .help(MenuPresentation.windowTooltip(title: title, window: window))
     }
 }
 
 enum MenuRowFactory {
-    static let rowWidth: CGFloat = 400
+    static let rowWidth: CGFloat = 340
     // Одна текстовая строка 12.5pt + по ~5pt воздуха сверху/снизу (V2-B,
     // выбор владельца 12.07 — ниже и плотнее двухстрочного варианта).
     static let rowHeight: CGFloat = 25
-    static let headerHeight: CGFloat = 20
-
-    static func headerItem() -> NSMenuItem {
-        let item = NSMenuItem()
-        let host = NSHostingView(rootView: MenuHeaderView())
-        host.sizingOptions = []
-        host.frame = NSRect(x: 0, y: 0, width: rowWidth, height: headerHeight)
-        item.view = host
-        item.title = MenuPresentation.columnLabels.joined(separator: ", ")
-        item.isEnabled = false
-        return item
-    }
-
     static func item(for account: Account, state: AccountState) -> NSMenuItem {
         let item = NSMenuItem()
         let accessibilityTitle = MenuPresentation.accessibilityTitle(account: account, state: state)
@@ -258,23 +247,5 @@ enum MenuRowFactory {
         item.title = accessibilityTitle
         item.representedObject = account.id
         return item
-    }
-}
-
-private struct MenuHeaderView: View {
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(MenuPresentation.columnLabels[0])
-            Spacer(minLength: 12)
-            Text(MenuPresentation.columnLabels[1]).frame(width: 46, alignment: .center)
-            Text(MenuPresentation.columnLabels[2]).frame(width: 46, alignment: .center)
-            Color.clear.frame(width: 11)
-        }
-        .font(.system(size: 9.5, weight: .medium))
-        .foregroundStyle(Color(nsColor: .tertiaryLabelColor))
-        .padding(.horizontal, 12)
-        .frame(width: MenuRowFactory.rowWidth, height: MenuRowFactory.headerHeight)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Account usage columns: 5-hour and week")
     }
 }
