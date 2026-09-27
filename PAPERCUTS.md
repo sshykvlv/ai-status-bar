@@ -14,3 +14,9 @@ Packaging a verified local app with `build.sh` after Swift 6.4 compiled successf
 
 ## 2026-09-27 15:26 — GPT-5.6 Sol
 Looking for an optional pull-request template with `rg --files .github` → the repository has no `.github` directory, so ripgrep returned a noisy IO error during an otherwise clean pre-PR check. Guard optional directories with `[ -d .github ]` before scanning them.
+
+## 2026-09-27 16:48 — GPT-5.6 Sol
+Loading the TDD skill's `writing-good-tests.md` reference from the shared skill root → that path does not exist because the reference lives inside `test-driven-development/`. Resolve relative references from the directory containing the selected `SKILL.md`.
+
+## 2026-09-27 17:18 — GPT-5.6 Sol
+Running release verification while the read-only reviewer also invoked SwiftPM in the shared worktree → `build.sh` waited on the shared `.build` lock. Review packets should ask reviewers to inspect existing test evidence without starting SwiftPM while root verification is active.

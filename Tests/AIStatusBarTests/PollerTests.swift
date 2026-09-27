@@ -48,6 +48,224 @@ final class PollerTests: XCTestCase {
         XCTAssertEqual(poller.authNextAllowed[id], gateAfterFirst,
                        "a forced poll inside the backoff window re-attempted the fetch instead of being gated")
     }
+
+    /// Catches a forced menu/wake poll entering the same account while its first
+    /// network fetch is suspended. The duplicate must finish without a second fetch.
+    @MainActor
+    func testConcurrentForcedPollsFetchEachAccountOnlyOnce() async {
+        let store = AccountStore(defaults: UserDefaults(suiteName: "aistatusbar.test.\(UUID().uuidString)")!,
+                                 hasClaudeMain: { false }, hasCodex: { false })
+        store.add(Account(id: UUID(), name: "Test", kind: .claudeMain, email: nil,
+                          claudeConfigDir: "/unused-because-fetch-is-injected"))
+        let fetcher = SuspendedUsageFetcher()
+        let duplicateFinished = expectation(description: "duplicate poll is dropped")
+        var updateCount = 0
+        let poller = Poller(store: store, fetchUsage: { account in
+            try await fetcher.fetch(account)
+        })
+        poller.onUpdate = { _ in updateCount += 1 }
+
+        let first = Task { @MainActor in await poller.pollAll(force: true) }
+        guard await fetcher.waitUntilStarted() else {
+            first.cancel()
+            await fetcher.releaseAll()
+            return XCTFail("first fetch did not start")
+        }
+        let duplicate = Task { @MainActor in
+            await poller.pollAll(force: true)
+            duplicateFinished.fulfill()
+        }
+
+        await fulfillment(of: [duplicateFinished], timeout: 1)
+        let callsBeforeRelease = await fetcher.calls()
+        XCTAssertEqual(callsBeforeRelease, 1,
+                       "duplicate poll did not finish before the active fetch was released")
+        await fetcher.releaseAll()
+        await first.value
+        await duplicate.value
+
+        let totalCalls = await fetcher.calls()
+        XCTAssertEqual(totalCalls, 1,
+                       "overlapping forced polls started more than one fetch for the same account")
+        XCTAssertEqual(updateCount, 1, "a dropped duplicate emitted a stale onUpdate callback")
+    }
+
+    @MainActor
+    func testDifferentAccountsCanFetchConcurrently() async {
+        let store = makeStore()
+        let firstID = UUID()
+        let secondID = UUID()
+        store.add(Account(id: firstID, name: "First", kind: .claudeMain, email: nil))
+        store.add(Account(id: secondID, name: "Second", kind: .claudeMain, email: nil))
+        let fetcher = SuspendedUsageFetcher()
+        let poll = Task { @MainActor in
+            await Poller(store: store, fetchUsage: fetcher.fetch).pollAll(force: true)
+        }
+
+        let bothStarted = await fetcher.waitUntilStarted(count: 2)
+        let startedIDs = await fetcher.startedAccountIDs()
+        XCTAssertTrue(bothStarted, "different accounts were serialized behind one global guard")
+        XCTAssertEqual(startedIDs, Set([firstID, secondID]))
+        await fetcher.releaseAll()
+        await poll.value
+    }
+
+    @MainActor
+    func testWakeUpgradesAnAlreadyRunningPollToRetryUnauthorizedOnce() async {
+        let store = makeStore()
+        let id = UUID()
+        store.add(Account(id: id, name: "Wake", kind: .claudeMain, email: nil))
+        let fetcher = WakeRetryFetcher()
+        var now = Date(timeIntervalSince1970: 1_000)
+        let poller = Poller(store: store, now: { now }, fetchUsage: fetcher.fetch)
+
+        await poller.pollAll(force: true)
+        now.addTimeInterval(11)
+        let active = Task { @MainActor in await poller.pollAll(force: true) }
+        guard await fetcher.waitUntilUnauthorizedFetchStarted() else {
+            active.cancel()
+            return XCTFail("unauthorized fetch did not start")
+        }
+        await poller.pollAll(force: true, retryUnauthorizedOnce: true)
+        await fetcher.releaseUnauthorizedFetch()
+        await active.value
+
+        let callCount = await fetcher.calls()
+        XCTAssertEqual(callCount, 3,
+                       "the overlapping wake request did not grant one unauthorized retry")
+        guard case .ok = poller.state(for: id) else {
+            return XCTFail("wake retry should recover the existing ok state")
+        }
+    }
+
+    @MainActor
+    func testCancellationReleasesSingleFlightGuard() async {
+        let store = makeStore()
+        store.add(Account(id: UUID(), name: "Cancel", kind: .claudeMain, email: nil))
+        let fetcher = CancellationFetcher()
+        let poller = Poller(store: store, fetchUsage: fetcher.fetch)
+
+        let first = Task { @MainActor in await poller.pollAll(force: true) }
+        guard await fetcher.waitUntilStarted(count: 1) else {
+            first.cancel()
+            return XCTFail("cancellable fetch did not start")
+        }
+        first.cancel()
+        await first.value
+        guard case .pending = poller.state(for: store.accounts[0].id) else {
+            return XCTFail("cancelling a poll should not publish a false offline state")
+        }
+        await poller.pollAll(force: true)
+
+        let callCount = await fetcher.calls()
+        XCTAssertEqual(callCount, 2,
+                       "cancellation left the account permanently marked in flight")
+    }
+
+    @MainActor
+    func testProviderShapedCancellationDoesNotPublishOffline() async {
+        let store = makeStore()
+        let id = UUID()
+        store.add(Account(id: id, name: "Network cancel", kind: .claudeMain, email: nil))
+        var calls = 0
+        let poller = Poller(store: store, fetchUsage: { _ in
+            calls += 1
+            if calls == 1 { throw FetchError.cancelled }
+            return Usage(fiveHour: .init(utilization: 20, resetsAt: nil), sevenDay: nil)
+        })
+
+        await poller.pollAll(force: true)
+        guard case .pending = poller.state(for: id) else {
+            return XCTFail("a URLSession cancellation should preserve the previous state")
+        }
+        await poller.pollAll(force: true)
+        guard case .ok = poller.state(for: id) else {
+            return XCTFail("the cancellation guard was not released for the next poll")
+        }
+        XCTAssertEqual(calls, 2)
+    }
+
+    @MainActor
+    private func makeStore() -> AccountStore {
+        AccountStore(defaults: UserDefaults(suiteName: "aistatusbar.test.\(UUID().uuidString)")!,
+                     hasClaudeMain: { false }, hasCodex: { false })
+    }
+}
+
+private actor SuspendedUsageFetcher {
+    private(set) var callCount = 0
+    private var accountIDs: Set<UUID> = []
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func fetch(_ account: Account) async throws -> Usage {
+        callCount += 1
+        accountIDs.insert(account.id)
+        if callCount == 1 {
+            await withCheckedContinuation { continuations.append($0) }
+        }
+        return Usage(fiveHour: .init(utilization: 20, resetsAt: nil), sevenDay: nil)
+    }
+
+    func waitUntilStarted(count: Int = 1) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while callCount < count, clock.now < deadline { await Task.yield() }
+        return callCount >= count
+    }
+
+    func calls() -> Int { callCount }
+    func startedAccountIDs() -> Set<UUID> { accountIDs }
+
+    func releaseAll() {
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume() }
+    }
+}
+
+private actor WakeRetryFetcher {
+    private var callCount = 0
+    private var unauthorizedContinuation: CheckedContinuation<Void, Never>?
+
+    func fetch(_ account: Account) async throws -> Usage {
+        callCount += 1
+        if callCount == 2 {
+            await withCheckedContinuation { unauthorizedContinuation = $0 }
+            throw FetchError.unauthorized
+        }
+        return Usage(fiveHour: .init(utilization: 20, resetsAt: nil), sevenDay: nil)
+    }
+
+    func waitUntilUnauthorizedFetchStarted() async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while callCount < 2, clock.now < deadline { await Task.yield() }
+        return callCount >= 2
+    }
+
+    func releaseUnauthorizedFetch() { unauthorizedContinuation?.resume() }
+    func calls() -> Int { callCount }
+}
+
+private actor CancellationFetcher {
+    private var callCount = 0
+
+    func fetch(_ account: Account) async throws -> Usage {
+        callCount += 1
+        if callCount == 1 {
+            try await Task.sleep(nanoseconds: 60_000_000_000)
+        }
+        return Usage(fiveHour: .init(utilization: 20, resetsAt: nil), sevenDay: nil)
+    }
+
+    func waitUntilStarted(count: Int) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(1))
+        while callCount < count, clock.now < deadline { await Task.yield() }
+        return callCount >= count
+    }
+
+    func calls() -> Int { callCount }
 }
 
 final class AccountStoreTests: XCTestCase {
