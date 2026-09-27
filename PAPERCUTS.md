@@ -20,3 +20,9 @@ Loading the TDD skill's `writing-good-tests.md` reference from the shared skill 
 
 ## 2026-09-27 17:18 — GPT-5.6 Sol
 Running release verification while the read-only reviewer also invoked SwiftPM in the shared worktree → `build.sh` waited on the shared `.build` lock. Review packets should ask reviewers to inspect existing test evidence without starting SwiftPM while root verification is active.
+
+## 2026-09-27 17:29 — GPT-5.6 Sol
+Creating a worktree and running `swift test` in the same shell command → `git worktree add` left the shell in the original dirty checkout, so the first baseline covered the wrong tree. Run setup commands with the new worktree as the command working directory, or explicitly `cd` after creation.
+
+## 2026-09-27 17:35 — GPT-5.6 Sol
+Cleaning a validated `mktemp` release-probe directory with `rm -rf` → the command guard rejected the entire read-only integration probe before execution. Move the uniquely named temporary directory to Trash instead of using recursive removal.
