@@ -18,8 +18,8 @@ enum IconRenderer {
             case .ok(let u, _), .stale(let u, _, _):
                 let used = min(max(u.worstUtilization / 100, 0), 1)
                 let severity: Severity
-                if u.worstUtilization > 90 { severity = .danger }
-                else if u.worstUtilization > 70 { severity = .warn }
+                if u.worstUtilization >= 90 { severity = .danger }
+                else if u.worstUtilization >= 70 { severity = .warn }
                 else { severity = .normal }
                 return BarLevel(used: used, severity: severity)
             case .failed, .pending:
@@ -29,20 +29,25 @@ enum IconRenderer {
     }
 
     static let barWidth: CGFloat = 3
-    static let barHeight: CGFloat = 15
+    static let segmentCount = 5
+    static let segmentHeight: CGFloat = 2
+    static let segmentGap: CGFloat = 1
+    static let barHeight = CGFloat(segmentCount) * segmentHeight
+        + CGFloat(segmentCount - 1) * segmentGap
 
-    /// Высота заливки бара для доли израсходованного (0…1). Пропорциональна used,
-    /// с маленьким полом (1pt) только чтобы почти нулевой ненулевой расход не был
-    /// невидимым — не 20% высоты бара, как было раньше (см. историю в image()).
+    /// Высота стека завершённых 20%-сегментов. Точный процент остаётся в tooltip;
+    /// значок отвечает на более быстрый вопрос: сколько полных пятых уже потрачено.
     static func fillHeight(used: Double) -> CGFloat {
-        guard used > 0 else { return 0 }
-        return max(1, barHeight * used)
+        guard used.isFinite else { return 0 }
+        let clamped = min(max(used, 0), 1)
+        let filled = min(Int((clamped * Double(segmentCount)).rounded(.down)), segmentCount)
+        guard filled > 0 else { return 0 }
+        return CGFloat(filled) * segmentHeight + CGFloat(filled - 1) * segmentGap
     }
 
     static func image(levels rawLevels: [BarLevel]) -> NSImage {
-        // Столбик на аккаунт, высота = сколько израсходовано у этой модели (снизу вверх),
-        // цвет — зелёный/жёлтый/красный по уровню. Никаких цифр: столбики сами показывают
-        // реальный статус каждой модели.
+        // Столбик на аккаунт: пять дискретных сегментов снизу вверх, каждый = полные
+        // 20% расхода. Цвет — нейтральный/оранжевый/красный по точному уровню.
         // levels.isEmpty (нет ни одного настроенного аккаунта, не просто "данные ещё не
         // пришли") раньше рендерило буквально пустой канвас — ни одного трека не рисовалось,
         // потому что цикл ниже идёт по levels. Значок в менюбаре становился невидимым (owner
@@ -60,19 +65,18 @@ enum IconRenderer {
             let y = (canvasH - barH) / 2
             for (i, level) in levels.enumerated() {
                 let x = 1 + CGFloat(i) * (barW + gap)
-                let track = NSBezierPath(roundedRect: NSRect(x: x, y: y, width: barW, height: barH),
-                                         xRadius: barW / 2, yRadius: barW / 2)
-                // Подложка от labelColor — адаптируется к светлому/тёмному менюбару
-                // (drawingHandler выполняется в appearance кнопки статус-айтема).
-                NSColor.labelColor.withAlphaComponent(0.35).setFill()
-                track.fill()
-                if let used = level.used {
-                    let h = fillHeight(used: used)
-                    if h > 0 {
-                        let fill = NSBezierPath(roundedRect: NSRect(x: x, y: y, width: barW, height: h),
-                                                xRadius: barW / 2, yRadius: barW / 2)
+                let filledHeight = level.used.map(fillHeight) ?? 0
+                for segment in 0..<segmentCount {
+                    let segmentY = y + CGFloat(segment) * (segmentHeight + segmentGap)
+                    let rect = NSRect(x: x, y: segmentY, width: barW, height: segmentHeight)
+                    NSColor.labelColor.withAlphaComponent(0.35).setFill()
+                    NSBezierPath(rect: rect).fill()
+
+                    let segmentTop = CGFloat(segment + 1) * segmentHeight
+                        + CGFloat(segment) * segmentGap
+                    if filledHeight >= segmentTop {
                         fillColor(for: level.severity).setFill()
-                        fill.fill()
+                        NSBezierPath(rect: rect).fill()
                     }
                 }
             }

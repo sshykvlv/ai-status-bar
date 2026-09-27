@@ -5,3 +5,12 @@ Owner reported another macOS keychain prompt from AI Status Bar, hours after thi
 
 ## 2026-07-21 09:20 — Sonnet 5
 `log` (the `/usr/bin/log` CLI, used to inspect unified system logs — securityd/coreauthd Keychain events, this app's own OSLog output) is shadowed by a zsh builtin in this shell: bare `log show ...` fails with `(eval):log:1: too many arguments` instead of running the real binary. Every `log show` call earlier in this session had its stderr redirected to `/dev/null`, so the shadowing failure was silent and looked identical to "no matching log entries" — led to a wrong "zero evidence" conclusion that had to be walked back once caught. Fix: always invoke `/usr/bin/log` explicitly (or `command log`) in this environment, never bare `log`.
+
+## 2026-09-27 14:17 — GPT-5.6 Sol
+Building the segmented-icon contact sheet with ImageMagick `montage -label` → the default font resolved to an empty name, emitted `unable to read font`, and silently omitted labels. Pass an explicit installed font before the input images, or compose the labels separately.
+
+## 2026-09-27 14:19 — GPT-5.6 Sol
+Packaging a verified local app with `build.sh` after Swift 6.4 compiled successfully → the script copied from the old hardcoded `.build/apple/Products/Release` layout, while Swift now emitted `.build/out/Products/Release`. Resolve the product directory through `swift build --show-bin-path` instead of depending on toolchain internals.
+
+## 2026-09-27 15:26 — GPT-5.6 Sol
+Looking for an optional pull-request template with `rg --files .github` → the repository has no `.github` directory, so ripgrep returned a noisy IO error during an otherwise clean pre-PR check. Guard optional directories with `[ -d .github ]` before scanning them.
