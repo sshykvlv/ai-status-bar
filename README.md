@@ -22,7 +22,7 @@ Use **Add Account…**, choose Claude or Codex, and finish sign-in in your brows
 
 If an older CLI-backed row expires, open its submenu and choose **Sign in again…**. The row keeps its name and position, then becomes app-owned so it no longer depends on a CLI folder or login.
 
-The icon is a mini equalizer: one bar per account, split into five blocks. Each completed block represents 20% used; exact percentages remain in the tooltip. A bar turns orange at 70% and red at 90%.
+The icon is a mini equalizer: one continuous bar per account. Its height shows the exact percentage used; its color shifts gradually from green through yellow and orange to red as usage rises. Exact percentages remain in the tooltip.
 
 ## Privacy
 
