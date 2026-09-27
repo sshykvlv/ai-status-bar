@@ -31,6 +31,34 @@ final class ParserTests: XCTestCase {
         XCTAssertNotNil(sd.resetsAt)
     }
 
+    func testCodexClassifiesSingleWeeklyPrimaryWindowByDuration() throws {
+        let data = Data(#"{"rate_limit":{"primary_window":{"used_percent":35,"limit_window_seconds":604800,"reset_at":1788355537},"secondary_window":null}}"#.utf8)
+
+        let usage = try CodexUsageParser.parse(data)
+
+        XCTAssertNil(usage.fiveHour)
+        XCTAssertEqual(usage.sevenDay?.utilization, 35)
+        XCTAssertEqual(usage.sevenDay?.resetsAt, Date(timeIntervalSince1970: 1_788_355_537))
+    }
+
+    func testCodexWindowWithoutUsedPercentIsMissingRatherThanZero() throws {
+        let data = Data(#"{"rate_limit":{"primary_window":{"limit_window_seconds":18000,"reset_at":1788355537},"secondary_window":{"used_percent":42,"limit_window_seconds":604800}}}"#.utf8)
+
+        let usage = try CodexUsageParser.parse(data)
+
+        XCTAssertNil(usage.fiveHour)
+        XCTAssertEqual(usage.sevenDay?.utilization, 42)
+    }
+
+    func testCodexFallsBackToLegacyWindowPositionsWhenDurationsAreMissing() throws {
+        let data = Data(#"{"rate_limit":{"primary_window":{"used_percent":12},"secondary_window":{"used_percent":34}}}"#.utf8)
+
+        let usage = try CodexUsageParser.parse(data)
+
+        XCTAssertEqual(usage.fiveHour?.utilization, 12)
+        XCTAssertEqual(usage.sevenDay?.utilization, 34)
+    }
+
     func testCodexMissingRateLimitThrows() {
         XCTAssertThrowsError(try CodexUsageParser.parse(Data("{}".utf8)))
     }

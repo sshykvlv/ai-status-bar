@@ -26,6 +26,8 @@ If an older CLI-backed row expires, open its submenu and choose **Sign in againâ
 
 The icon is a mini equalizer: one continuous bar per account. Its height shows the exact percentage used; its color shifts gradually from green through yellow and orange to red as usage rises. Exact percentages remain in the tooltip.
 
+If a provider omits a usage window or its percentage, the app shows no data (`â€”`) instead of inventing `0%`. Codex windows are matched by their reported duration when available, with the legacy primary/secondary ordering retained as a fallback.
+
 ## Privacy
 
 All requests go directly from your Mac to Anthropic and OpenAI. No servers, no telemetry. New OAuth sessions live only in your macOS Keychain. Existing Claude Code and Codex credentials are read locally as a compatibility layer; AI Status Bar never writes or refreshes them.
