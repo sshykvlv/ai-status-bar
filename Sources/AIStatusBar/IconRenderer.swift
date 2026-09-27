@@ -1,30 +1,20 @@
 import AppKit
 
 enum IconRenderer {
-    enum Severity: Equatable {
-        case normal, notice, warn, danger
-    }
-
     struct BarLevel: Equatable {
         let used: Double?        // 0…1, доля израсходованного; nil = нет данных
-        let severity: Severity
     }
 
     /// Один бар на аккаунт. Высота точно показывает worstUtilization, а цвет всего
-    /// заполнения меняется на каждой четверти: зелёный, жёлтый, оранжевый, красный.
+    /// заполнения плавно проходит через зелёный, жёлтый, оранжевый и красный.
     static func barLevels(_ states: [AccountState]) -> [BarLevel] {
         states.map { state in
             switch state {
             case .ok(let u, _), .stale(let u, _, _):
                 let used = min(max(u.worstUtilization / 100, 0), 1)
-                let severity: Severity
-                if u.worstUtilization >= 75 { severity = .danger }
-                else if u.worstUtilization >= 50 { severity = .warn }
-                else if u.worstUtilization >= 25 { severity = .notice }
-                else { severity = .normal }
-                return BarLevel(used: used, severity: severity)
+                return BarLevel(used: used)
             case .failed, .pending:
-                return BarLevel(used: nil, severity: .normal)
+                return BarLevel(used: nil)
             }
         }
     }
@@ -42,7 +32,7 @@ enum IconRenderer {
 
     static func image(levels rawLevels: [BarLevel]) -> NSImage {
         // Столбик на аккаунт: одна непрерывная полоса с точной высотой расхода.
-        // Цвет всей заливки переключается на порогах 25%, 50% и 75%.
+        // Цвет всей заливки непрерывно меняется по мере роста расхода.
         // levels.isEmpty (нет ни одного настроенного аккаунта, не просто "данные ещё не
         // пришли") раньше рендерило буквально пустой канвас — ни одного трека не рисовалось,
         // потому что цикл ниже идёт по levels. Значок в менюбаре становился невидимым (owner
@@ -50,7 +40,7 @@ enum IconRenderer {
         // нечем было кликнуть "Add Account…"). Подставляем один пустой трек-плейсхолдер,
         // как для .pending — та же визуальная лексика "данных нет", но остаётся видимым и
         // кликабельным.
-        let levels = rawLevels.isEmpty ? [BarLevel(used: nil, severity: .normal)] : rawLevels
+        let levels = rawLevels.isEmpty ? [BarLevel(used: nil)] : rawLevels
         let barW = barWidth, gap: CGFloat = 2, barH = barHeight, canvasH: CGFloat = 18
         let count = max(levels.count, 1)
         let width = CGFloat(count) * barW + CGFloat(count - 1) * gap + 2
@@ -70,7 +60,7 @@ enum IconRenderer {
                         let fill = NSBezierPath(
                             roundedRect: NSRect(x: x, y: y, width: barW, height: height),
                             xRadius: barW / 2, yRadius: barW / 2)
-                        fillColor(for: level.severity).setFill()
+                        fillColor(used: used).setFill()
                         fill.fill()
                     }
                 }
@@ -81,12 +71,30 @@ enum IconRenderer {
         return img
     }
 
-    private static func fillColor(for severity: Severity) -> NSColor {
-        switch severity {
-        case .danger: return .systemRed
-        case .warn: return .systemOrange
-        case .notice: return .systemYellow
-        case .normal: return .systemGreen
+    /// Continuous traffic-light palette. Fixed device-RGB anchors keep interpolation
+    /// stable instead of blending dynamic system colors from different appearances.
+    static func fillColor(used: Double) -> NSColor {
+        typealias Stop = (position: Double, red: CGFloat, green: CGFloat, blue: CGFloat)
+        let stops: [Stop] = [
+            (0, 0.204, 0.780, 0.349),       // system green
+            (1.0 / 3.0, 1, 0.839, 0.039), // system yellow
+            (2.0 / 3.0, 1, 0.584, 0),     // system orange
+            (1, 1, 0.231, 0.188),         // system red
+        ]
+        let value = used.isFinite ? min(max(used, 0), 1) : 0
+        guard let upperIndex = stops.firstIndex(where: { value <= $0.position }) else {
+            let last = stops[stops.count - 1]
+            return NSColor(deviceRed: last.red, green: last.green, blue: last.blue, alpha: 1)
         }
+        let upper = stops[upperIndex]
+        guard upperIndex > 0 else {
+            return NSColor(deviceRed: upper.red, green: upper.green, blue: upper.blue, alpha: 1)
+        }
+        let lower = stops[upperIndex - 1]
+        let progress = CGFloat((value - lower.position) / (upper.position - lower.position))
+        func blend(_ from: CGFloat, _ to: CGFloat) -> CGFloat { from + (to - from) * progress }
+        return NSColor(deviceRed: blend(lower.red, upper.red),
+                       green: blend(lower.green, upper.green),
+                       blue: blend(lower.blue, upper.blue), alpha: 1)
     }
 }

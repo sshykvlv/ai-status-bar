@@ -12,25 +12,21 @@ final class IconTests: XCTestCase {
         ]
         let levels = IconRenderer.barLevels(states)
         XCTAssertEqual(levels[0].used!, 0.62, accuracy: 0.001) // worst window utilization
-        XCTAssertEqual(levels[0].severity, .warn)
         XCTAssertNil(levels[1].used)                           // no data → empty track
         XCTAssertNil(levels[2].used)
     }
 
-    func testColorBandChangesAtEveryQuarter() {
-        let cases: [(Double, IconRenderer.Severity)] = [
-            (0, .normal), (24.9, .normal),
-            (25, .notice), (49.9, .notice),
-            (50, .warn), (74.9, .warn),
-            (75, .danger), (100, .danger),
-        ]
-        for (percent, expected) in cases {
-            let state: AccountState = .ok(
-                Usage(fiveHour: .init(utilization: percent, resetsAt: nil), sevenDay: nil),
-                fetchedAt: .init())
-            XCTAssertEqual(IconRenderer.barLevels([state])[0].severity, expected,
-                           "unexpected color band at \(percent)%")
-        }
+    func testColorGradientPassesSmoothlyThroughFourAnchors() {
+        assertColor(IconRenderer.fillColor(used: 0), red: 0.204, green: 0.780, blue: 0.349)
+        assertColor(IconRenderer.fillColor(used: 1.0 / 3.0), red: 1, green: 0.839, blue: 0.039)
+        assertColor(IconRenderer.fillColor(used: 2.0 / 3.0), red: 1, green: 0.584, blue: 0)
+        assertColor(IconRenderer.fillColor(used: 1), red: 1, green: 0.231, blue: 0.188)
+
+        // Halfway from green to yellow must be a blend, not either discrete endpoint.
+        assertColor(IconRenderer.fillColor(used: 1.0 / 6.0),
+                    red: (0.204 + 1) / 2,
+                    green: (0.780 + 0.839) / 2,
+                    blue: (0.349 + 0.039) / 2)
     }
 
     func testStaleUsesUsageToo() {
@@ -55,14 +51,14 @@ final class IconTests: XCTestCase {
         XCTAssertTrue(img.isTemplate)
     }
 
-    func testImageNonTemplateWhenDanger() {
+    func testImageNonTemplateAtHighUsage() {
         let s: [AccountState] = [.ok(Usage(fiveHour: .init(utilization: 95, resetsAt: nil),
                                            sevenDay: nil), fetchedAt: .init())]
         let img = IconRenderer.image(levels: IconRenderer.barLevels(s))
         XCTAssertFalse(img.isTemplate)
     }
 
-    func testImageNonTemplateWhenWarn() {
+    func testImageNonTemplateAtMidUsage() {
         let s: [AccountState] = [.ok(Usage(fiveHour: .init(utilization: 75, resetsAt: nil),
                                            sevenDay: nil), fetchedAt: .init())]
         let img = IconRenderer.image(levels: IconRenderer.barLevels(s))
@@ -87,7 +83,7 @@ final class IconTests: XCTestCase {
     }
 
     func testImageRendersOneContinuousColumn() {
-        let level = IconRenderer.BarLevel(used: 0.5, severity: .warn)
+        let level = IconRenderer.BarLevel(used: 0.5)
         let image = IconRenderer.image(levels: [level])
         let rep = bitmap(image)
 
@@ -117,10 +113,8 @@ final class IconTests: XCTestCase {
             throw XCTSkip("set AISTATUSBAR_ICON_RENDER_DIR to render icon previews")
         }
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        for percent in [0, 24, 25, 49, 50, 74, 75, 100] {
-            let severity: IconRenderer.Severity = percent >= 75 ? .danger
-                : (percent >= 50 ? .warn : (percent >= 25 ? .notice : .normal))
-            let image = IconRenderer.image(levels: [.init(used: Double(percent) / 100, severity: severity)])
+        for percent in stride(from: 0, through: 100, by: 10) {
+            let image = IconRenderer.image(levels: [.init(used: Double(percent) / 100)])
             for scale in [1, 2] {
                 let rep = bitmap(image, scale: scale)
                 let url = URL(fileURLWithPath: "\(dir)/usage-\(percent)-\(scale)x.png")
@@ -156,5 +150,14 @@ final class IconTests: XCTestCase {
 
     private func alpha(atX x: Int, y: Int, in rep: NSBitmapImageRep) -> CGFloat {
         rep.colorAt(x: x, y: y)?.alphaComponent ?? 0
+    }
+
+    private func assertColor(_ color: NSColor, red: CGFloat, green: CGFloat, blue: CGFloat,
+                             accuracy: CGFloat = 0.005, file: StaticString = #filePath,
+                             line: UInt = #line) {
+        let rgb = color.usingColorSpace(.deviceRGB)!
+        XCTAssertEqual(rgb.redComponent, red, accuracy: accuracy, file: file, line: line)
+        XCTAssertEqual(rgb.greenComponent, green, accuracy: accuracy, file: file, line: line)
+        XCTAssertEqual(rgb.blueComponent, blue, accuracy: accuracy, file: file, line: line)
     }
 }
