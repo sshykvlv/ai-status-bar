@@ -12,6 +12,8 @@ brew install --cask sshykvlv/tap/ai-status-bar
 
 Or download `AIStatusBar.zip` from [Releases](https://github.com/sshykvlv/ai-status-bar/releases) and unzip it to `/Applications`.
 
+The in-app updater verifies each download in an isolated staging directory, then reveals a signed, versioned `.app` in Downloads. It never replaces an existing download or the running application automatically.
+
 ## Usage
 
 Your existing Claude Code and Codex accounts are detected automatically so an upgrade does not lose any rows.
