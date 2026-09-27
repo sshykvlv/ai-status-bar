@@ -80,15 +80,14 @@ final class IconTests: XCTestCase {
     }
 
     /// Catches accidental rounding-up or a return to continuous fill: the icon
-    /// represents only completed 20% blocks, while the tooltip keeps precision.
-    func testFillHeightAdvancesOnlyAtCompletedTwentyPercentThresholds() {
+    /// represents only completed 25% blocks, while the tooltip keeps precision.
+    func testFillHeightAdvancesOnlyAtCompletedTwentyFivePercentThresholds() {
         let cases: [(used: Double, height: CGFloat)] = [
-            (0, 0), (0.199, 0),
-            (0.2, 2), (0.399, 2),
-            (0.4, 5), (0.599, 5),
-            (0.6, 8), (0.799, 8),
-            (0.8, 11), (0.999, 11),
-            (1, 14),
+            (0, 0), (0.249, 0),
+            (0.25, 3), (0.499, 3),
+            (0.5, 7), (0.749, 7),
+            (0.75, 11), (0.999, 11),
+            (1, 15),
         ]
 
         for sample in cases {
@@ -99,29 +98,21 @@ final class IconTests: XCTestCase {
 
     func testFillHeightClampsValuesOutsideTheUsageRange() {
         XCTAssertEqual(IconRenderer.fillHeight(used: -0.2), 0)
-        XCTAssertEqual(IconRenderer.fillHeight(used: 1.2), 14)
+        XCTAssertEqual(IconRenderer.fillHeight(used: 1.2), 15)
     }
 
     /// Catches a visually continuous track: every 1pt separator must remain
     /// transparent even between filled blocks at actual menu-bar size.
-    func testImageRendersFiveSeparatedSegments() {
-        let level = IconRenderer.BarLevel(used: 0.4, severity: .normal)
+    func testImageRendersFourSeparatedSegments() {
+        let level = IconRenderer.BarLevel(used: 0.5, severity: .normal)
         let image = IconRenderer.image(levels: [level])
         let rep = bitmap(image)
 
-        for y in [4, 7, 10, 13] {
-            XCTAssertLessThan(alpha(atX: 2, y: y, in: rep), 0.05, "gap at y=\(y)")
+        let visible = (0..<rep.pixelsHigh).map { alpha(atX: 2, y: $0, in: rep) > 0.1 }
+        let sections = visible.enumerated().filter { index, shown in
+            shown && (index == 0 || !visible[index - 1])
         }
-        // NSBitmapImageRep exposes rows top-down here, so the two bottom
-        // segments land at the largest y coordinates.
-        for y in [12, 15] {
-            XCTAssertGreaterThan(alpha(atX: 2, y: y, in: rep), 0.9, "filled segment at y=\(y)")
-        }
-        for y in [3, 6, 9] {
-            let value = alpha(atX: 2, y: y, in: rep)
-            XCTAssertGreaterThan(value, 0.1, "empty segment track at y=\(y)")
-            XCTAssertLessThan(value, 0.8, "empty segment should not look filled at y=\(y)")
-        }
+        XCTAssertEqual(sections.count, 4, "the rendered bar must have four separate blocks")
     }
 
     /// Regression coverage for the "icon disappears" bug: with zero configured

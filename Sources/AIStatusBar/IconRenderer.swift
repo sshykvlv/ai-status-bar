@@ -29,14 +29,14 @@ enum IconRenderer {
     }
 
     static let barWidth: CGFloat = 3
-    static let segmentCount = 5
-    static let segmentHeight: CGFloat = 2
+    static let segmentCount = 4
+    static let segmentHeight: CGFloat = 3
     static let segmentGap: CGFloat = 1
     static let barHeight = CGFloat(segmentCount) * segmentHeight
         + CGFloat(segmentCount - 1) * segmentGap
 
-    /// Высота стека завершённых 20%-сегментов. Точный процент остаётся в tooltip;
-    /// значок отвечает на более быстрый вопрос: сколько полных пятых уже потрачено.
+    /// Высота стека завершённых 25%-сегментов. Точный процент остаётся в tooltip;
+    /// значок отвечает на более быстрый вопрос: сколько полных четвертей уже потрачено.
     static func fillHeight(used: Double) -> CGFloat {
         guard used.isFinite else { return 0 }
         let clamped = min(max(used, 0), 1)
@@ -46,8 +46,8 @@ enum IconRenderer {
     }
 
     static func image(levels rawLevels: [BarLevel]) -> NSImage {
-        // Столбик на аккаунт: пять дискретных сегментов снизу вверх, каждый = полные
-        // 20% расхода. Цвет — нейтральный/оранжевый/красный по точному уровню.
+        // Столбик на аккаунт: четыре дискретных сегмента снизу вверх, каждый = полные
+        // 25% расхода. Цвет — нейтральный/оранжевый/красный по точному уровню.
         // levels.isEmpty (нет ни одного настроенного аккаунта, не просто "данные ещё не
         // пришли") раньше рендерило буквально пустой канвас — ни одного трека не рисовалось,
         // потому что цикл ниже идёт по levels. Значок в менюбаре становился невидимым (owner
@@ -62,7 +62,9 @@ enum IconRenderer {
         // Template оставляем только когда данных нет вовсе (пустой значок).
         let hasData = levels.contains { $0.used != nil }
         let img = NSImage(size: NSSize(width: width, height: canvasH), flipped: false) { _ in
-            let y = (canvasH - barH) / 2
+            // Align the 1pt separators to pixel rows at native size; a half-point
+            // origin would blur the gaps and make the four blocks look continuous.
+            let y = floor((canvasH - barH) / 2)
             for (i, level) in levels.enumerated() {
                 let x = 1 + CGFloat(i) * (barW + gap)
                 let filledHeight = level.used.map(fillHeight) ?? 0

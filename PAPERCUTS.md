@@ -14,3 +14,6 @@ Packaging a verified local app with `build.sh` after Swift 6.4 compiled successf
 
 ## 2026-09-27 15:26 — GPT-5.6 Sol
 Looking for an optional pull-request template with `rg --files .github` → the repository has no `.github` directory, so ripgrep returned a noisy IO error during an otherwise clean pre-PR check. Guard optional directories with `[ -d .github ]` before scanning them.
+
+## 2026-09-27 16:38 — GPT-6 Sol
+Verifying a freshly built, Developer ID-signed local app inside the workspace sandbox → `codesign --verify --strict` falsely reported an invalid arm64 signature. The same bundle verified successfully outside the sandbox and after installation; perform final macOS signature verification unsandboxed.
