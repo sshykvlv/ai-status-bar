@@ -77,8 +77,9 @@ enum IconRenderer {
         typealias Stop = (position: Double, red: CGFloat, green: CGFloat, blue: CGFloat)
         let stops: [Stop] = [
             (0, 0.204, 0.780, 0.349),       // system green
-            (1.0 / 3.0, 1, 0.839, 0.039), // system yellow
-            (2.0 / 3.0, 1, 0.584, 0),     // system orange
+            (0.25, 0.204, 0.780, 0.349),  // hold green through the first quarter
+            (0.50, 1, 0.839, 0.039),      // system yellow
+            (0.75, 1, 0.584, 0),          // system orange
             (1, 1, 0.231, 0.188),         // system red
         ]
         let value = used.isFinite ? min(max(used, 0), 1) : 0

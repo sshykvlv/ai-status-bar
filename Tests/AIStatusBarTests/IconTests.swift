@@ -16,14 +16,15 @@ final class IconTests: XCTestCase {
         XCTAssertNil(levels[2].used)
     }
 
-    func testColorGradientPassesSmoothlyThroughFourAnchors() {
+    func testColorGradientKeepsGreenThroughFirstQuarterThenBlends() {
         assertColor(IconRenderer.fillColor(used: 0), red: 0.204, green: 0.780, blue: 0.349)
-        assertColor(IconRenderer.fillColor(used: 1.0 / 3.0), red: 1, green: 0.839, blue: 0.039)
-        assertColor(IconRenderer.fillColor(used: 2.0 / 3.0), red: 1, green: 0.584, blue: 0)
+        assertColor(IconRenderer.fillColor(used: 0.25), red: 0.204, green: 0.780, blue: 0.349)
+        assertColor(IconRenderer.fillColor(used: 0.5), red: 1, green: 0.839, blue: 0.039)
+        assertColor(IconRenderer.fillColor(used: 0.75), red: 1, green: 0.584, blue: 0)
         assertColor(IconRenderer.fillColor(used: 1), red: 1, green: 0.231, blue: 0.188)
 
-        // Halfway from green to yellow must be a blend, not either discrete endpoint.
-        assertColor(IconRenderer.fillColor(used: 1.0 / 6.0),
+        // Halfway through the second quarter must be a blend, not a discrete jump.
+        assertColor(IconRenderer.fillColor(used: 0.375),
                     red: (0.204 + 1) / 2,
                     green: (0.780 + 0.839) / 2,
                     blue: (0.349 + 0.039) / 2)
