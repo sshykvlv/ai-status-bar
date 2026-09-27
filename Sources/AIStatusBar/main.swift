@@ -178,9 +178,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .failed(let badge):
             addStatusLines(sub, state: .failed(badge: badge))
             sub.addItem(.separator())
-        case .ok(let usage, _):
+        case .ok(let usage, let fetchedAt):
             addWindowDetails(sub, title: "5-hour window", window: usage.fiveHour)
             addWindowDetails(sub, title: "Weekly window", window: usage.sevenDay)
+            addStatusLines(sub, state: .ok(usage, fetchedAt: fetchedAt))
             sub.addItem(.separator())
         case .stale(let usage, let fetchedAt, let badge):
             addWindowDetails(sub, title: "5-hour window", window: usage.fiveHour)
