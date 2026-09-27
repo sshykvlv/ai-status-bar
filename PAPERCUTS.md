@@ -26,3 +26,6 @@ Creating a worktree and running `swift test` in the same shell command → `git 
 
 ## 2026-09-27 17:35 — GPT-5.6 Sol
 Cleaning a validated `mktemp` release-probe directory with `rm -rf` → the command guard rejected the entire read-only integration probe before execution. Move the uniquely named temporary directory to Trash instead of using recursive removal.
+
+## 2026-09-27 17:56 — GPT-5.6 Sol
+Merging PR #10 with `gh pr merge --delete-branch` from a linked feature worktree → GitHub merged the PR, but the command returned failure because local `main` was already checked out in the primary worktree. Treat merge and local branch cleanup as separate operations, and verify PR state after a non-zero exit.
