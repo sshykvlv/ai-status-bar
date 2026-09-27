@@ -46,7 +46,7 @@ final class MenuPresentationTests: XCTestCase {
                        "Weekly window · no data")
     }
 
-    func testExpiredStaleAccountRetainsLastDataLanguage() {
+    func testExpiredStaleAccountShowsRetainedDataAge() {
         let fetched = Date(timeIntervalSince1970: 1_800_000_000)
         let usage = Usage(fiveHour: .init(utilization: 12, resetsAt: nil),
                           sevenDay: .init(utilization: 23, resetsAt: nil))
@@ -55,7 +55,7 @@ final class MenuPresentationTests: XCTestCase {
 
         XCTAssertEqual(MenuPresentation.statusLines(for: state,
                                                      now: fetched.addingTimeInterval(720)),
-                       ["Session expired", "Last data retained"])
+                       ["Session expired", "Last updated 12 min ago"])
     }
 
     func testOfflineStaleAccountShowsAccountLevelFreshness() {
@@ -68,6 +68,16 @@ final class MenuPresentationTests: XCTestCase {
                        ["Offline", "Last updated 12 min ago"])
     }
 
+    func testHealthyAccountSubmenuShowsWhenDataWasUpdated() {
+        let fetched = Date(timeIntervalSince1970: 1_800_000_000)
+        let usage = Usage(fiveHour: nil, sevenDay: nil)
+        let state = AccountState.ok(usage, fetchedAt: fetched)
+
+        XCTAssertEqual(MenuPresentation.statusLines(for: state,
+                                                     now: fetched.addingTimeInterval(720)),
+                       ["Last updated 12 min ago"])
+    }
+
     func testAccessibilityTitleIncludesIdentityProviderWindowsAndStatus() {
         let fetched = Date(timeIntervalSince1970: 1_800_000_000)
         let usage = Usage(fiveHour: .init(utilization: 12, resetsAt: nil),
@@ -75,8 +85,45 @@ final class MenuPresentationTests: XCTestCase {
         let state = AccountState.stale(usage, fetchedAt: fetched,
                                        badge: MenuPresentation.authFailureBadge)
 
-        XCTAssertEqual(MenuPresentation.accessibilityTitle(account: account, state: state),
-                       "Work, Codex, 5-hour 12%, week 23%, session expired")
+        XCTAssertEqual(MenuPresentation.accessibilityTitle(account: account, state: state,
+                                                            now: fetched.addingTimeInterval(720)),
+                       "Work, Codex, 5-hour 12%, week 23%, session expired, last updated 12 min ago")
+    }
+
+    func testHealthyAccessibilityTitleIncludesDataFreshness() {
+        let fetched = Date(timeIntervalSince1970: 1_800_000_000)
+        let usage = Usage(fiveHour: .init(utilization: 12, resetsAt: nil),
+                          sevenDay: .init(utilization: 23, resetsAt: nil))
+        let state = AccountState.ok(usage, fetchedAt: fetched)
+
+        XCTAssertEqual(MenuPresentation.accessibilityTitle(account: account, state: state,
+                                                            now: fetched.addingTimeInterval(720)),
+                       "Work, Codex, 5-hour 12%, week 23%, last updated 12 min ago")
+    }
+
+    func testStaleAccessibilityTitleNamesFailureReasonAndFreshness() {
+        let fetched = Date(timeIntervalSince1970: 1_800_000_000)
+        let usage = Usage(fiveHour: nil, sevenDay: nil)
+        let state = AccountState.stale(usage, fetchedAt: fetched, badge: "offline")
+
+        XCTAssertEqual(MenuPresentation.accessibilityTitle(account: account, state: state,
+                                                            now: fetched.addingTimeInterval(720)),
+                       "Work, Codex, 5-hour no data, week no data, offline, last updated 12 min ago")
+    }
+
+    func testFailedAccessibilityTitleNamesWhyDataIsUnavailable() {
+        let cases = [
+            ("offline", "Work, Codex, no usage data, offline"),
+            ("rate-limited", "Work, Codex, no usage data, temporarily rate-limited"),
+            (MenuPresentation.authFailureBadge, "Work, Codex, no usage data, session expired"),
+        ]
+
+        for (badge, expected) in cases {
+            XCTAssertEqual(MenuPresentation.accessibilityTitle(
+                account: account,
+                state: .failed(badge: badge)
+            ), expected)
+        }
     }
 
     func testAuthCopyNeverInstructsUserToRepairCLI() {

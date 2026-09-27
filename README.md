@@ -28,6 +28,8 @@ The icon is a mini equalizer: one continuous bar per account. Its height shows t
 
 If a provider omits a usage window or its percentage, the app shows no data (`—`) instead of inventing `0%`. Codex windows are matched by their reported duration when available, with the legacy primary/secondary ordering retained as a fallback.
 
+Open an account submenu to see reset times, forecasts, connection status, and when the displayed data was last updated. VoiceOver announces the same window values, status, and freshness from the compact account row.
+
 ## Privacy
 
 All requests go directly from your Mac to Anthropic and OpenAI. No servers, no telemetry. New OAuth sessions live only in your macOS Keychain. Existing Claude Code and Codex credentials are read locally as a compatibility layer; AI Status Bar never writes or refreshes them.

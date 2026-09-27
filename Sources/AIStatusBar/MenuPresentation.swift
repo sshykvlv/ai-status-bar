@@ -27,15 +27,17 @@ enum MenuPresentation {
         switch state {
         case .pending:
             return ["Loading…"]
-        case .ok:
-            return []
+        case .ok(_, let fetchedAt):
+            return [freshness(fetchedAt: fetchedAt, now: now)]
         case .failed(let badge):
             if badge == authFailureBadge { return ["Session expired", "No saved usage data"] }
             if badge == "offline" { return ["Offline", "No recent usage data"] }
             if badge == "rate-limited" { return ["Temporarily rate-limited"] }
             return [badge]
         case .stale(_, let fetchedAt, let badge):
-            if badge == authFailureBadge { return ["Session expired", "Last data retained"] }
+            if badge == authFailureBadge {
+                return ["Session expired", freshness(fetchedAt: fetchedAt, now: now)]
+            }
             let title = badge == "offline" ? "Offline"
                 : badge == "rate-limited" ? "Temporarily rate-limited"
                 : badge
@@ -43,31 +45,40 @@ enum MenuPresentation {
         }
     }
 
-    static func accessibilityTitle(account: Account, state: AccountState) -> String {
+    static func accessibilityTitle(account: Account, state: AccountState,
+                                   now: Date = .now) -> String {
         let identity = Account.isGenericPlaceholderName(account.name)
             ? (account.email ?? account.name)
             : account.name
         let provider = account.kind.isCodex ? "Codex" : "Claude"
         var parts = [identity, provider]
         switch state {
-        case .ok(let usage, _), .stale(let usage, _, _):
+        case .ok(let usage, let fetchedAt):
             parts.append("5-hour \(windowPercent(usage.fiveHour))")
             parts.append("week \(windowPercent(usage.sevenDay))")
+            parts.append(freshness(fetchedAt: fetchedAt, now: now).lowercased())
+        case .stale(let usage, let fetchedAt, let badge):
+            parts.append("5-hour \(windowPercent(usage.fiveHour))")
+            parts.append("week \(windowPercent(usage.sevenDay))")
+            parts.append(accessibilityStatus(for: badge))
+            parts.append(freshness(fetchedAt: fetchedAt, now: now).lowercased())
         case .pending:
             parts.append("loading")
-        case .failed:
+        case .failed(let badge):
             parts.append("no usage data")
-        }
-        if case .stale(_, _, let badge) = state, badge == authFailureBadge {
-            parts.append("session expired")
-        } else if case .failed(let badge) = state, badge == authFailureBadge {
-            parts.append("session expired")
+            parts.append(accessibilityStatus(for: badge))
         }
         return parts.joined(separator: ", ")
     }
 
     private static func windowPercent(_ window: UsageWindow?) -> String {
         window.map { "\(Int($0.utilization))%" } ?? "no data"
+    }
+
+    private static func accessibilityStatus(for badge: String) -> String {
+        if badge == authFailureBadge { return "session expired" }
+        if badge == "rate-limited" { return "temporarily rate-limited" }
+        return badge
     }
 
     private static func freshness(fetchedAt: Date, now: Date) -> String {
