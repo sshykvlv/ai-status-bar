@@ -32,8 +32,22 @@ final class Poller {
 
     private var ownTokens: [UUID: OAuthTokens] = [:]
     private var identityAttempted: Set<UUID> = []
+    // MainActor makes this check-and-insert atomic between suspension points:
+    // timer, menu, and wake triggers may overlap, but one account never does.
+    private var accountsInFlight: Set<UUID> = []
+    // A wake that overlaps an ordinary poll upgrades that poll instead of starting
+    // another fetch or losing the one-shot dark-wake unauthorized retry.
+    private var wakeRetryRequested: Set<UUID> = []
+    private let now: () -> Date
+    // Test seam at the network boundary; production keeps the provider-specific path below.
+    private let usageFetcher: ((Account) async throws -> Usage)?
 
-    init(store: AccountStore) { self.store = store }
+    init(store: AccountStore, now: @escaping () -> Date = { Date() },
+         fetchUsage: ((Account) async throws -> Usage)? = nil) {
+        self.store = store
+        self.now = now
+        self.usageFetcher = fetchUsage
+    }
 
     func start() {
         timer = Timer.scheduledTimer(withTimeInterval: Self.interval, repeats: true) { [weak self] _ in
@@ -66,25 +80,46 @@ final class Poller {
             onUpdate?(states)
             return
         }
-        await withTaskGroup(of: Void.self) { group in
+        let didPoll = await withTaskGroup(of: Bool.self, returning: Bool.self) { group in
             for account in store.accounts {
                 group.addTask { @MainActor in
-                    await self.poll(account, force: force, retryUnauthorizedOnce: retryUnauthorizedOnce)
+                    await self.pollIfIdle(account, force: force,
+                                          retryUnauthorizedOnce: retryUnauthorizedOnce)
                 }
             }
+            var result = false
+            for await polled in group { result = result || polled }
+            return result
         }
-        onUpdate?(states)
+        if didPoll { onUpdate?(states) }
     }
 
-    private func poll(_ account: Account, force: Bool, retryUnauthorizedOnce: Bool = false) async {
-        let now = Date()
-        if let gate = nextAllowed[account.id], now < gate, !force { return }
-        if let authGate = authNextAllowed[account.id], now < authGate {
+    private func pollIfIdle(_ account: Account, force: Bool,
+                            retryUnauthorizedOnce: Bool = false) async -> Bool {
+        guard !accountsInFlight.contains(account.id) else {
+            if retryUnauthorizedOnce { wakeRetryRequested.insert(account.id) }
+            Self.log.debug("skip \(account.name, privacy: .public): poll already in flight")
+            return false
+        }
+        accountsInFlight.insert(account.id)
+        if retryUnauthorizedOnce { wakeRetryRequested.insert(account.id) }
+        defer {
+            accountsInFlight.remove(account.id)
+            wakeRetryRequested.remove(account.id)
+        }
+        await poll(account, force: force, mayConsumeWakeRetry: true)
+        return true
+    }
+
+    private func poll(_ account: Account, force: Bool, mayConsumeWakeRetry: Bool) async {
+        let currentTime = now()
+        if let gate = nextAllowed[account.id], currentTime < gate, !force { return }
+        if let authGate = authNextAllowed[account.id], currentTime < authGate {
             Self.log.debug("skip \(account.name, privacy: .public): auth backoff until \(authGate, privacy: .public)")
             return
         }
-        if force, let last = lastFetch(account.id), now.timeIntervalSince(last) < 10 { return }
-        nextAllowed[account.id] = now.addingTimeInterval(Self.interval - 1)
+        if force, let last = lastFetch(account.id), currentTime.timeIntervalSince(last) < 10 { return }
+        nextAllowed[account.id] = currentTime.addingTimeInterval(Self.interval - 1)
         do {
             let fetched = try await fetchUsage(for: account)
             if authFailureLevel[account.id] != nil {
@@ -94,27 +129,35 @@ final class Poller {
             authFailureLevel[account.id] = nil
             authNextAllowed[account.id] = nil
             let usage = withBurnRateForecast(account: account, usage: fetched)
-            states[account.id] = .ok(usage, fetchedAt: Date())
+            states[account.id] = .ok(usage, fetchedAt: now())
             // Движок всегда обрабатывает опрос (чтобы состояние прогревалось даже пока
             // алерты выключены) — гейт "включено ли" живёт в AppDelegate, не здесь.
             let events = alertEngine.process(accountID: account.id, accountName: account.name, usage: usage)
             if !events.isEmpty { onAlerts?(events) }
-            await fetchIdentityIfNeeded(account)
+            if usageFetcher == nil { await fetchIdentityIfNeeded(account) }
+        } catch is CancellationError {
+            Self.log.debug("cancelled \(account.name, privacy: .public): leaving its previous state unchanged")
+            return
+        } catch FetchError.cancelled {
+            Self.log.debug("cancelled \(account.name, privacy: .public): leaving its previous state unchanged")
+            return
         } catch FetchError.rateLimited {
             let lvl = min((backoffLevel[account.id] ?? -1) + 1, Self.backoffSchedule.count - 1)
             backoffLevel[account.id] = lvl
-            nextAllowed[account.id] = Date().addingTimeInterval(Self.backoffSchedule[lvl])
+            nextAllowed[account.id] = now().addingTimeInterval(Self.backoffSchedule[lvl])
             demote(account.id, badge: "rate-limited")
         } catch FetchError.unauthorized {
-            if retryUnauthorizedOnce, case .ok = states[account.id] ?? .pending {
+            if mayConsumeWakeRetry, wakeRetryRequested.remove(account.id) != nil,
+               case .ok = states[account.id] ?? .pending {
                 Self.log.notice("unauthorized \(account.name, privacy: .public) right after wake, was .ok — retrying once in 2s (dark-wake guard)")
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                await poll(account, force: true, retryUnauthorizedOnce: false)
+                do { try await Task.sleep(nanoseconds: 2_000_000_000) }
+                catch { return }
+                await poll(account, force: true, mayConsumeWakeRetry: false)
                 return
             }
             let lvl = min((authFailureLevel[account.id] ?? -1) + 1, Self.backoffSchedule.count - 1)
             authFailureLevel[account.id] = lvl
-            let until = Date().addingTimeInterval(Self.backoffSchedule[lvl])
+            let until = now().addingTimeInterval(Self.backoffSchedule[lvl])
             authNextAllowed[account.id] = until
             Self.log.error("unauthorized \(account.name, privacy: .public) kind=\(account.kind.rawValue, privacy: .public) level=\(lvl, privacy: .public) backoffUntil=\(until, privacy: .public)")
             demote(account.id, badge: badgeForAuthFailure(account))
@@ -125,6 +168,7 @@ final class Poller {
     }
 
     private func fetchUsage(for account: Account) async throws -> Usage {
+        if let usageFetcher { return try await usageFetcher(account) }
         switch account.kind {
         case .claudeMain:
             guard let t = KeychainStore.claudeCodeTokens(configDir: account.claudeConfigDir) else {

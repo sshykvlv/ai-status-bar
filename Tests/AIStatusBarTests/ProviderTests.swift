@@ -91,6 +91,13 @@ final class ProviderTests: XCTestCase {
         catch { XCTAssertEqual(error as? FetchError, .rateLimited) }
     }
 
+    func testClaudeProviderPreservesURLSessionCancellation() async {
+        MockURLProtocol.errorHandler = { _ in URLError(.cancelled) }
+        defer { MockURLProtocol.errorHandler = nil }
+        do { _ = try await ClaudeProvider(session: .mocked).fetchUsage(accessToken: "tok"); XCTFail() }
+        catch { XCTAssertEqual(error as? FetchError, .cancelled) }
+    }
+
     // A non-HTTP URLResponse must degrade to a typed error, not crash the whole menu
     // bar app via a force-cast — this is a background poller running every 60s forever.
     func testClaudeProviderNonHTTPResponseThrowsInsteadOfCrashing() async {

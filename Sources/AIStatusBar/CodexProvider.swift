@@ -46,7 +46,7 @@ struct CodexProvider {
         req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         let (data, resp): (Data, URLResponse)
         do { (data, resp) = try await session.data(for: req) }
-        catch { throw FetchError.network(error.localizedDescription) }
+        catch { throw FetchError.fromNetwork(error) }
         guard let http = resp as? HTTPURLResponse else { throw FetchError.badResponse("non-HTTP response") }
         switch http.statusCode {
         case 200: return try CodexUsageParser.parse(data)
@@ -63,7 +63,7 @@ struct CodexProvider {
             code: code, verifier: verifier, redirectURI: redirectURI)
         let (data, response): (Data, URLResponse)
         do { (data, response) = try await session.data(for: request) }
-        catch { throw FetchError.network(error.localizedDescription) }
+        catch { throw FetchError.fromNetwork(error) }
         guard let http = response as? HTTPURLResponse else { throw FetchError.unauthorized }
         guard http.statusCode == 200,
               let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -87,7 +87,7 @@ struct CodexProvider {
         ])
         let data: Data, response: URLResponse
         do { (data, response) = try await session.data(for: req) }
-        catch { throw FetchError.network(error.localizedDescription) }
+        catch { throw FetchError.fromNetwork(error) }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200,
               let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw FetchError.unauthorized }

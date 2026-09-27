@@ -75,10 +75,17 @@ enum AccountState: Equatable {
 }
 
 enum FetchError: Error, Equatable {
+    case cancelled           // explicit cancellation must not become an offline state
     case unauthorized        // 401/403 — токен протух/нет scope
     case rateLimited         // 429
     case network(String)
     case badResponse(String)
+
+    static func fromNetwork(_ error: Error) -> FetchError {
+        if error is CancellationError { return .cancelled }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return .cancelled }
+        return .network(error.localizedDescription)
+    }
 }
 
 import AppKit

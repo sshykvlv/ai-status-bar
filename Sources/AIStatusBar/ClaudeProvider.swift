@@ -22,7 +22,7 @@ struct ClaudeProvider {
         let req = authedRequest("https://api.anthropic.com/api/oauth/usage", accessToken: accessToken)
         let (data, resp): (Data, URLResponse)
         do { (data, resp) = try await session.data(for: req) }
-        catch { throw FetchError.network(error.localizedDescription) }
+        catch { throw FetchError.fromNetwork(error) }
         guard let http = resp as? HTTPURLResponse else { throw FetchError.badResponse("non-HTTP response") }
         switch http.statusCode {
         case 200: return try ClaudeUsageParser.parse(data)
@@ -36,7 +36,7 @@ struct ClaudeProvider {
         let req = authedRequest("https://api.anthropic.com/api/oauth/profile", accessToken: accessToken)
         let (data, resp): (Data, URLResponse)
         do { (data, resp) = try await session.data(for: req) }
-        catch { throw FetchError.network(error.localizedDescription) }
+        catch { throw FetchError.fromNetwork(error) }
         guard let http = resp as? HTTPURLResponse else { throw FetchError.badResponse("non-HTTP response") }
         switch http.statusCode {
         case 200: return try Self.parseProfile(data)
@@ -80,7 +80,9 @@ struct ClaudeProvider {
             "refresh_token": tokens.refreshToken,
             "client_id": ClaudeOAuthConstants.clientID,
         ])
-        let (data, resp) = try await session.data(for: req)
+        let (data, resp): (Data, URLResponse)
+        do { (data, resp) = try await session.data(for: req) }
+        catch { throw FetchError.fromNetwork(error) }
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
               let d = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let access = d["access_token"] as? String,

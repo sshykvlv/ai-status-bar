@@ -2,6 +2,7 @@ import Foundation
 
 final class MockURLProtocol: URLProtocol {
     static var handler: ((URLRequest) -> (Int, Data))?
+    static var errorHandler: ((URLRequest) -> Error)?
     /// Alternate to `handler`, checked first — hands back a raw URLResponse instead of
     /// wrapping a status code in HTTPURLResponse. Lets tests simulate a non-HTTP response
     /// (e.g. to prove `as? HTTPURLResponse` guards degrade gracefully instead of crashing).
@@ -9,6 +10,10 @@ final class MockURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
+        if let errorHandler = Self.errorHandler {
+            client?.urlProtocol(self, didFailWithError: errorHandler(request))
+            return
+        }
         if let rawHandler = Self.rawHandler {
             let (resp, data) = rawHandler(request)
             client?.urlProtocol(self, didReceive: resp, cacheStoragePolicy: .notAllowed)
