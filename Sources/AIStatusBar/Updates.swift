@@ -2,7 +2,7 @@ import AppKit
 import CryptoKit
 import Darwin
 
-// Self-updater, ported from Lidless's checkUpdates()/downloadUpdate() (~/dev/mac-keep-awake/main.swift),
+// Self-updater, ported from Lidless's checkUpdates()/downloadUpdate() (~/dev/app-lidless/main.swift),
 // using the SAFE "verify-then-reveal" model: never auto-swaps the running app bundle and never
 // relaunches. It verifies the release zip's SHA-256 when published, extracts into an isolated staging
 // directory, then — as a mandatory, non-optional barrier — verifies the unzipped .app has a valid code
