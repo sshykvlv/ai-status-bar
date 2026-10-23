@@ -9,7 +9,7 @@
 плюс Codex (ChatGPT-подписка). Замена ClaudeUsageBar, у которого один аккаунт
 и ручная вставка куки.
 
-**Референс стиля и архитектуры — Lidless** (`~/dev/mac-keep-awake`): AppKit,
+**Референс стиля и архитектуры — Lidless** (`~/dev/app-lidless`): AppKit,
 `NSStatusItem` + стандартный `NSMenu`-дропдаун, минимум файлов, `build.sh` со
 swiftc, собственный лёгкий чекер апдейтов, никаких сторонних зависимостей.
 
@@ -173,7 +173,7 @@ struct Account { let id: UUID; var name: String; let kind: Kind
 
 - GitHub public repo `limitbar`, MIT.
 - `build.sh` (swiftc, universal binary), `release.sh` — zip + GitHub Release,
-  cask в существующем `~/dev/homebrew-tap`.
+  cask в существующем `~/dev/app-homebrew-tap`.
 - Самообновление — портируем механизм Lidless (тихая проверка при старте +
   пункт «Check for Updates…»), без Sparkle.
 
