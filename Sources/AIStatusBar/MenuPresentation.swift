@@ -10,6 +10,7 @@ enum MenuPresentation {
     static let settingsActionTitles = [
         "Launch at Login",
         "Usage Alerts",
+        "Show Mac Stats",
         "Check for Updates…",
     ]
     static let authFailureBadge = "sign in again"

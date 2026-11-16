@@ -30,9 +30,23 @@ If a provider omits a usage window or its percentage, the app shows no data (`�
 
 Open an account submenu to see reset times, forecasts, connection status, and when the displayed data was last updated. VoiceOver announces the same window values, status, and freshness from the compact account row.
 
+Each chip is labelled with its window — `5H · 42%`, `7D · 87%`. At 70% and above it turns into a soft orange plate, at 90% into a red one; text on both stays readable in light and dark mode.
+
+### Mac stats
+
+When agents make the Mac crawl, the **Mac** block under the accounts tells you why without asking them:
+
+- **Mac** shows two chips, `CPU 54%` and `RAM 18/24 GB`. Only the one that is in trouble lights up: CPU turns orange at 70% and red at 90%, RAM follows macOS memory pressure. Its submenu has memory, swap and CPU, plus **Open Activity Monitor**.
+- The three rows below are the biggest consumers. Agent sessions absorb their helpers (`Claude Code ×6 — 6.4 GB` includes every MCP server and `node` they started); apps absorb their helper processes. When CPU is the bottleneck, the rows rank by CPU instead.
+- Each row's submenu has **Quit** and **Force Quit**. Agent sessions and every force quit ask first.
+- **Leftovers** are agent helpers whose session already exited (parent gone, its process group dead, a `node`/`python`/`uv`/MCP tool). They are listed by script name — some may be servers you detached on purpose, so nothing is killed until you click.
+- Swap has no "clear" button: macOS drains it on its own once memory frees up.
+
+Turn the block off in **Settings → Show Mac Stats**. Design and rules: [`docs/superpowers/specs/2026-11-16-mac-stats-design.md`](docs/superpowers/specs/2026-11-16-mac-stats-design.md).
+
 ## Privacy
 
-All requests go directly from your Mac to Anthropic and OpenAI. No servers, no telemetry. New OAuth sessions live only in your macOS Keychain. Existing Claude Code and Codex credentials are read locally as a compatibility layer; AI Status Bar never writes or refreshes them.
+All requests go directly from your Mac to Anthropic and OpenAI. No servers, no telemetry. New OAuth sessions live only in your macOS Keychain. Existing Claude Code and Codex credentials are read locally as a compatibility layer; AI Status Bar never writes or refreshes them. Mac stats are read from the local kernel; process names and command lines never leave your Mac, and only processes you own can be quit.
 
 ## Credits
 

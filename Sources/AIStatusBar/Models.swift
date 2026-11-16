@@ -94,9 +94,31 @@ extension NSColor {
     /// Warn-оранжевый порогов: в тёмной теме — systemOrange, в светлой — более
     /// глубокий янтарный (фидбэк владельца 13.07: systemOrange на светлом фоне
     /// чипа читается слабо). Динамический — резолвится по appearance при отрисовке.
+    /// 16.11: #B86600 давал 2.8–3.2:1 на фоне чипа (ниже WCAG AA 4.5) —
+    /// углублён до #8F4C00 (4.3–5.0:1, на уровне secondaryLabel).
     static let asbWarn = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             ? .systemOrange
-            : NSColor(srgbRed: 0.72, green: 0.40, blue: 0.0, alpha: 1.0)
+            : NSColor(srgbRed: 0x8F / 255, green: 0x4C / 255, blue: 0.0, alpha: 1.0)
+    }
+
+    /// Danger-красный порогов (фидбэк владельца 16.11: «красный практически не
+    /// читается»). systemRed на фоне чипа даёт 2.3–2.7:1 в светлой теме и
+    /// 3.2–3.8:1 в тёмной. Замер против фона чипа (#D0D0D0–#E0E0E0 светлая,
+    /// #323232–#3C3C3C тёмная): #A8160D → 4.9–5.7:1, #FF8A80 → 4.8–5.6:1.
+    /// Залитые плашки порогов (фидбэк владельца 16.11: «инвертировать на плашку
+    /// такого цвета»). Текст на них белый; заливка одна для обеих тем, подобрана
+    /// под белый ≥4.5:1 — systemOrange с белым даёт 2.1:1, поэтому он темнее.
+    /// 16.11 (фидбэк владельца «оранжевый понежнее, гамма с coolors»): Sandy
+    /// Brown #F4A261 из палитры 264653·2a9d8f·e9c46a·f4a261·e76f51. Белый на нём —
+    /// 2.1:1, поэтому текст тёмно-коричневый `asbWarnFillText` (6.6:1).
+    static let asbWarnFill = NSColor(srgbRed: 0xF4 / 255, green: 0xA2 / 255, blue: 0x61 / 255, alpha: 1.0)
+    static let asbWarnFillText = NSColor(srgbRed: 0x4A / 255, green: 0x24 / 255, blue: 0.0, alpha: 1.0)
+    static let asbDangerFill = NSColor(srgbRed: 0xD9 / 255, green: 0x2D / 255, blue: 0x20 / 255, alpha: 1.0) // 4.8:1
+
+    static let asbDanger = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0xFF / 255, green: 0x8A / 255, blue: 0x80 / 255, alpha: 1.0)
+            : NSColor(srgbRed: 0xA8 / 255, green: 0x16 / 255, blue: 0x0D / 255, alpha: 1.0)
     }
 }

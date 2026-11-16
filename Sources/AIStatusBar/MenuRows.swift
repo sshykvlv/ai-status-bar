@@ -98,7 +98,7 @@ struct AccountRowView: View {
                 .padding(.leading, 2)
         }
         .padding(.horizontal, 12)
-        // 260pt задаёт компактную исходную ширину меню. После того как AppKit
+        // rowWidth (316pt) задаёт компактную исходную ширину меню. После того как AppKit
         // добавляет системные поля и колонку сабменю, строка растягивается на всю
         // получившуюся ширину — подсветка и стрелка доходят до правого края.
         .frame(minWidth: MenuRowFactory.rowWidth, maxWidth: .infinity,
@@ -129,8 +129,8 @@ struct AccountRowView: View {
     @ViewBuilder
     private func windows(usage: Usage?) -> some View {
         HStack(spacing: 6) {
-            WindowChip(title: "5-hour window", window: usage?.fiveHour, hovered: hovered)
-            WindowChip(title: "Weekly window", window: usage?.sevenDay, hovered: hovered)
+            WindowChip(title: "5-hour window", short: "5H", window: usage?.fiveHour, hovered: hovered)
+            WindowChip(title: "Weekly window", short: "7D", window: usage?.sevenDay, hovered: hovered)
         }
         // Кластер окон не сжимается — при длинной identity усекается она, не цифры.
         .layoutPriority(1)
@@ -164,6 +164,10 @@ enum ResetClock {
 /// заливка quaternary — как системные чипы.
 private struct WindowChip: View {
     let title: String
+    /// Метка окна внутри чипа (фидбэк 16.11: «помечать, что это за лимит»;
+    /// затем «капсом, через точку по центру»): «5H · 42%», «7D · 87%». Метка и
+    /// точка тоньше и мельче цифры, чтобы главным оставался процент.
+    let short: String
     let window: UsageWindow?
     var hovered: Bool = false
 
@@ -184,11 +188,26 @@ private struct WindowChip: View {
         return window.utilization <= 99 && window.projectedExhaustion != nil
     }
 
+    /// ≥70 / ≥90 — залитая плашка с белым текстом (фидбэк 16.11: цветная цифра
+    /// на сером чипе читалась плохо, заливка видна издалека).
+    private var alertFill: Color? {
+        guard let util = window?.utilization else { return nil }
+        if util >= 90 { return Color(nsColor: .asbDangerFill) }
+        if util >= 70 { return Color(nsColor: .asbWarnFill) }
+        return nil
+    }
+
+    /// Текст на залитой плашке: на мягком оранжевом — тёмно-коричневый
+    /// (белый там 2.1:1), на красном — белый.
+    private var plateText: Color? {
+        guard let util = window?.utilization, util >= 70 else { return nil }
+        return util >= 90 ? .white : Color(nsColor: .asbWarnFillText)
+    }
+
     private var percentColor: Color {
+        if let plateText { return plateText }
         if hovered { return .white }
-        guard let util = window?.utilization else { return Color(nsColor: .tertiaryLabelColor) }
-        if util >= 90 { return Color(nsColor: .systemRed) }
-        if util >= 70 { return Color(nsColor: .asbWarn) }
+        guard window != nil else { return Color(nsColor: .tertiaryLabelColor) }
         return Color(nsColor: .secondaryLabelColor)
     }
 
@@ -202,15 +221,20 @@ private struct WindowChip: View {
             if forecast {
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 8.5, weight: .semibold))
-                    .foregroundStyle(hovered ? Color.white : Color(nsColor: .asbWarn))
+                    .foregroundStyle(plateText ?? (hovered ? Color.white : Color(nsColor: .asbWarn)))
             }
-            (Text(window.map { "\(Int($0.utilization))%" } ?? "—")
+            (Text(short + " · ")
+                .font(.system(size: 10))
+                .foregroundColor(plateText ?? (hovered ? .white : Color(nsColor: .secondaryLabelColor)))
+             + Text(window.map { "\(Int($0.utilization))%" } ?? "—")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(percentColor)
              + Text(resetSuffix)
                 .font(.system(size: 11))
                 // На выделенной (синей) строке серые тексты теряют контраст — в белый.
-                .foregroundColor(hovered ? .white.opacity(0.85) : Color(nsColor: .secondaryLabelColor)))
+                // На залитой плашке — чистый белый: white@0.85 на #D92D20 даёт ~3.9:1.
+                .foregroundColor(plateText
+                                 ?? (hovered ? .white.opacity(0.85) : Color(nsColor: .secondaryLabelColor))))
                 .monospacedDigit()
                 .lineLimit(1)
                 .fixedSize()
@@ -224,14 +248,18 @@ private struct WindowChip: View {
         .padding(.bottom, 2)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(hovered ? Color.white.opacity(0.18) : Self.chipFill)
+                // Залитая плашка остаётся залитой и на выделенной строке —
+                // уровень тревоги не должен пропадать под курсором.
+                .fill(alertFill ?? (hovered ? Color.white.opacity(0.18) : Self.chipFill))
         )
         .help(MenuPresentation.windowTooltip(title: title, window: window))
     }
 }
 
 enum MenuRowFactory {
-    static let rowWidth: CGFloat = 260
+    // 316 (было 260): метки «5H · »/«7D · » в чипах (16.11) добавили ~56pt —
+    // без запаса identity аккаунта («sasha@example.com») усекалась.
+    static let rowWidth: CGFloat = 316
     // Одна текстовая строка 12.5pt + по ~5pt воздуха сверху/снизу (V2-B,
     // выбор владельца 12.07 — ниже и плотнее двухстрочного варианта).
     static let rowHeight: CGFloat = 25

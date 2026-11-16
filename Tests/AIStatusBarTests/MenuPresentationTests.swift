@@ -10,7 +10,7 @@ final class MenuPresentationTests: XCTestCase {
         XCTAssertEqual(MenuPresentation.topLevelActionTitles,
                        ["Add Account…", "Settings", "About AI Status Bar", "Quit AI Status Bar"])
         XCTAssertEqual(MenuPresentation.settingsActionTitles,
-                       ["Launch at Login", "Usage Alerts", "Check for Updates…"])
+                       ["Launch at Login", "Usage Alerts", "Show Mac Stats", "Check for Updates…"])
 
         let all = MenuPresentation.topLevelActionTitles + MenuPresentation.settingsActionTitles
         XCTAssertFalse(all.contains { $0.localizedCaseInsensitiveContains("refresh") })
@@ -20,7 +20,7 @@ final class MenuPresentationTests: XCTestCase {
     func testMenuWidthFitsContentWithoutHeaderSlack() {
         let item = MenuRowFactory.item(for: account, state: .pending)
 
-        XCTAssertEqual(item.view?.frame.width, 260)
+        XCTAssertEqual(item.view?.frame.width, 316)
     }
 
     func testAccountRowStretchesAcrossFinalMenuWidth() throws {
