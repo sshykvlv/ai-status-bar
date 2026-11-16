@@ -23,4 +23,12 @@ final class ProcessKillerTests: XCTestCase {
         XCTAssertEqual(ProcessKiller.forcePlan(c, procs: procs, ownPid: 99, ownUid: 501),
                        [13, 21, 12, 20])
     }
+
+    func testRecycledPidIsDropped() {
+        var old = p(40, 1); old.startedAt = Date(timeIntervalSince1970: 100)
+        var reborn = p(40, 1); reborn.startedAt = Date(timeIntervalSince1970: 200)
+        var same = p(41, 1); same.startedAt = Date(timeIntervalSince1970: 100)
+        let live = ProcessKiller.stillSame(old: [old, same], fresh: [reborn, same])
+        XCTAssertEqual(live.map(\.pid), [41])
+    }
 }

@@ -16,6 +16,13 @@ enum ProcessKiller {
         }
     }
 
+    /// Процессы, которые живы и это те же самые процессы, что в снимке: pid
+    /// мог освободиться и достаться другому — сверяем время старта.
+    static func stillSame(old: [ProcSample], fresh: [ProcSample]) -> [ProcSample] {
+        let started = Dictionary(old.map { ($0.pid, $0.startedAt) }, uniquingKeysWith: { a, _ in a })
+        return fresh.filter { started[$0.pid] == $0.startedAt }
+    }
+
     /// Force Quit: сначала помощники, потом корни — иначе убитый корень
     /// оставит детей сиротами, и они всплывут в Leftovers.
     static func forcePlan(_ c: Consumer, procs: [ProcSample],

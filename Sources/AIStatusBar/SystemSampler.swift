@@ -9,9 +9,12 @@ final class SystemSampler {
     private var lastCPUTime: [Int32: Double] = [:]
     private var lastAt: Date?
     private let ownUid = getuid()
+    /// Процессы последнего замера — по ним гасятся строки снимка.
+    private(set) var lastProcs: [ProcSample] = []
 
     func sample(now: Date = .now) -> SystemSnapshot {
         let procs = Self.readProcs()
+        lastProcs = procs
         let wall = lastAt.map { now.timeIntervalSince($0) } ?? 0
         var perPid: [Int32: Double] = [:]
         if wall > 0 {

@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var store: AccountStore!
     private var poller: Poller!
+    private var system: SystemMenuController!
     private let menu = NSMenu()
     private var appearanceObservation: NSKeyValueObservation?
     private var wakeObserver: NSObjectProtocol?
@@ -23,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         store = AccountStore()
         poller = Poller(store: store)
+        system = SystemMenuController()
         poller.onUpdate = { [weak self] _ in self?.render() }
         poller.onAlerts = { events in
             guard UserDefaults.standard.bool(forKey: Self.usageAlertsKey) else { return }
@@ -31,11 +33,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         rebuildMenu()
         renderIcon()
         poller.start()
+        if SystemMenuController.isEnabled { system.start() }
         Updates.check(announce: false)
         if MockData.enabled,
            ProcessInfo.processInfo.environment["AISTATUSBAR_OPEN_MENU"] != nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.statusItem.button?.performClick(nil)
+                guard let self else { return }
+                // Dev-помощник для скриншотов (см. MockData): иконку может спрятать
+                // переполненная строка меню — AISTATUSBAR_POPUP=1 показывает меню
+                // посреди экрана, AISTATUSBAR_APPEARANCE=light|dark — тему.
+                if ProcessInfo.processInfo.environment["AISTATUSBAR_POPUP"] != nil,
+                   let screen = NSScreen.main {
+                    NSApp.activate(ignoringOtherApps: true)
+                    switch ProcessInfo.processInfo.environment["AISTATUSBAR_APPEARANCE"] {
+                    case "light": NSApp.appearance = NSAppearance(named: .aqua)
+                    case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+                    default: break
+                    }
+                    let at = NSPoint(x: screen.frame.midX - 150, y: screen.frame.midY + 200)
+                    self.menu.popUp(positioning: nil, at: at, in: nil)
+                } else {
+                    self.statusItem.button?.performClick(nil)
+                }
             }
         }
 
@@ -75,11 +94,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                   let sub = item.submenu else { continue }
             populateAccountSubmenu(sub, account: account)
         }
+        if SystemMenuController.isEnabled { system.menuWillOpen() }
         poller.pollNow()
     }
 
     func menuDidClose(_ menu: NSMenu) {
         menuIsOpen = false
+        if SystemMenuController.isEnabled { system.menuDidClose() }
         rebuildMenu()   // подхватить возможные изменения состава аккаунтов
     }
 
@@ -89,6 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let item = MenuRowFactory.item(for: account, state: poller.state(for: account.id))
             item.submenu = accountSubmenu(account)
             menu.addItem(item)
+        }
+        if SystemMenuController.isEnabled {
+            menu.addItem(.separator())
+            system.items().forEach(menu.addItem)
         }
         menu.addItem(.separator())
         addAction(MenuPresentation.topLevelActionTitles[0], #selector(addAccount))
@@ -125,8 +150,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alerts.state = UserDefaults.standard.bool(forKey: Self.usageAlertsKey) ? .on : .off
         submenu.addItem(alerts)
 
+        let macStats = NSMenuItem(title: MenuPresentation.settingsActionTitles[2],
+                                  action: #selector(toggleMacStats), keyEquivalent: "")
+        macStats.target = self
+        macStats.state = SystemMenuController.isEnabled ? .on : .off
+        submenu.addItem(macStats)
+
         submenu.addItem(.separator())
-        let updates = NSMenuItem(title: MenuPresentation.settingsActionTitles[2],
+        let updates = NSMenuItem(title: MenuPresentation.settingsActionTitles[3],
                                  action: #selector(checkUpdates), keyEquivalent: "")
         updates.target = self
         submenu.addItem(updates)
@@ -322,6 +353,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let newValue = !defaults.bool(forKey: Self.usageAlertsKey)
         defaults.set(newValue, forKey: Self.usageAlertsKey)
         if newValue { Notifier.requestAuthorization() }
+        rebuildMenu()
+    }
+    @objc private func toggleMacStats() {
+        let enabled = !SystemMenuController.isEnabled
+        UserDefaults.standard.set(enabled, forKey: SystemMenuController.enabledKey)
+        enabled ? system.start() : system.stop()
         rebuildMenu()
     }
     @objc private func checkUpdates() { Updates.check(announce: true) }
