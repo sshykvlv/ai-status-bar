@@ -50,6 +50,26 @@ final class SystemModelTests: XCTestCase {
         XCTAssertEqual(groups[0].helpers, 1)
     }
 
+    func testResponsibleProcessAdoptsLaunchdChildren() {
+        // XPC-сервисы висят на launchd (ppid 1); владельца знает «responsible pid».
+        var web = p(1728, 1, name: "com.apple.WebKit.WebContent",
+                    path: "/System/Library/Frameworks/WebKit.framework/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent", mb: 900)
+        web.responsiblePid = 31127
+        let mail = p(31127, 1, name: "Mail", path: "/System/Applications/Mail.app/Contents/MacOS/Mail", mb: 200)
+        let groups = SystemModel.group([mail, web], cpuPercentByPid: [:], ownUid: me)
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups[0].title, "Mail")
+        XCTAssertEqual(groups[0].rootPids, [31127])
+        XCTAssertEqual(groups[0].helpers, 1)
+    }
+
+    func testFrameworkNestedAppIsNotAnApp() {
+        let py = "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/Resources/Python.app/Contents/MacOS/Python"
+        XCTAssertNil(SystemModel.outerBundle(py))
+        let left = SystemModel.leftovers([p(900, 1, pgid: 899, name: "Python", path: py)], ownUid: me, now: now)
+        XCTAssertEqual(left.count, 1)
+    }
+
     func testOtherUsersIgnored() {
         let groups = SystemModel.group([p(5, 1, name: "WindowServer", mb: 900, uid: 88)],
                                        cpuPercentByPid: [:], ownUid: me)

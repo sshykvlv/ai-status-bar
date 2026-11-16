@@ -18,6 +18,9 @@ struct ProcSample: Equatable {
     var cpuTime: Double
     var startedAt: Date
     var args: [String] = []
+    /// «Ответственный» процесс по версии системы (как в Activity Monitor):
+    /// для XPC-сервиса WebKit это Mail/Safari. 0 — неизвестно.
+    var responsiblePid: Int32 = 0
 }
 
 enum Level: Int, Comparable {
@@ -126,7 +129,9 @@ enum SystemModel {
     /// поэтому берём ПЕРВОЕ вхождение — это само приложение.
     static func outerBundle(_ path: String) -> String? {
         guard let r = path.range(of: ".app/") else { return nil }
-        return String(path[..<r.lowerBound]) + ".app"
+        let bundle = String(path[..<r.lowerBound]) + ".app"
+        // Python.app внутри Python.framework — интерпретатор, а не приложение.
+        return bundle.contains(".framework/") ? nil : bundle
     }
 
     /// Группировка по дереву владения: внешний агентный CLI среди предков →
@@ -135,6 +140,12 @@ enum SystemModel {
                       ownUid: uid_t) -> [Consumer] {
         let mine = procs.filter { $0.uid == ownUid }
         let byPid = Dictionary(mine.map { ($0.pid, $0) }, uniquingKeysWith: { a, _ in a })
+        // Родитель для группировки: настоящий, а у детей launchd — ответственный.
+        func parent(_ p: ProcSample) -> Int32 {
+            if p.ppid == 1, p.responsiblePid > 1, p.responsiblePid != p.pid,
+               byPid[p.responsiblePid] != nil { return p.responsiblePid }
+            return p.ppid
+        }
 
         var keyOf: [Int32: (key: String, title: String, kind: ConsumerKind)] = [:]
         for p in mine {
@@ -143,11 +154,14 @@ enum SystemModel {
             var seen = Set<Int32>()
             while let c = cursor, seen.insert(c.pid).inserted {
                 if let t = agentTitles[c.name.lowercased()] { agent = t }   // последний = внешний
-                cursor = byPid[c.ppid]
+                cursor = byPid[parent(c)]
             }
+            // XPC-сервис без своего бандла, усыновлённый ответственным
+            // приложением (WebContent → Mail), считается частью приложения.
+            let adopter = parent(p) != p.ppid ? byPid[parent(p)] : nil
             if let agent {
                 keyOf[p.pid] = ("agent:" + agent, agent, .agent)
-            } else if let bundle = outerBundle(p.path) {
+            } else if let bundle = outerBundle(p.path) ?? adopter.flatMap({ outerBundle($0.path) }) {
                 let title = (bundle as NSString).lastPathComponent.replacingOccurrences(of: ".app", with: "")
                 keyOf[p.pid] = ("app:" + bundle, title, .app(bundlePath: bundle))
             } else {
@@ -159,7 +173,8 @@ enum SystemModel {
         var order: [String] = []
         for p in mine {
             guard let k = keyOf[p.pid] else { continue }
-            let isRoot = keyOf[p.ppid]?.key != k.key || p.ppid == p.pid
+            let up = parent(p)
+            let isRoot = keyOf[up]?.key != k.key || up == p.pid
             if groups[k.key] == nil {
                 order.append(k.key)
                 groups[k.key] = Consumer(key: k.key, title: k.title, kind: k.kind, rootPids: [],
