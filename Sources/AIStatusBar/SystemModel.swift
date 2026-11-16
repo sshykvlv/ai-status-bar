@@ -46,7 +46,7 @@ struct Consumer: Equatable {
     var rootPids: [Int32]
     var allPids: [Int32]
     var footprint: UInt64
-    /// Сумма по процессам, в процентах одного ядра (как в Activity Monitor).
+    /// Сумма по процессам, в процентах всей машины (как общий CPU).
     var cpuPercent: Double
     var helpers: Int
 }
@@ -61,6 +61,7 @@ struct Leftover: Equatable {
     var footprint: UInt64
     /// Сам процесс и его потомки (uv → python): гасятся вместе.
     var treePids: [Int32]
+    var cpuPercent: Double = 0
 }
 
 struct SystemSnapshot {
@@ -196,7 +197,8 @@ enum SystemModel {
 
     /// Осиротевшие помощники агентов. Правило и замер — в спеке, раздел
     /// «Leftover rule»: launchd-джобы сами лидеры своей группы и не проходят.
-    static func leftovers(_ procs: [ProcSample], ownUid: uid_t, now: Date) -> [Leftover] {
+    static func leftovers(_ procs: [ProcSample], ownUid: uid_t, now: Date,
+                          cpuPercentByPid: [Int32: Double] = [:]) -> [Leftover] {
         let alive = Set(procs.map(\.pid))
         var children: [Int32: [Int32]] = [:]
         for p in procs { children[p.ppid, default: []].append(p.pid) }
@@ -220,7 +222,8 @@ enum SystemModel {
             return Leftover(pid: p.pid, label: label(for: p), tool: p.name,
                             age: now.timeIntervalSince(p.startedAt),
                             footprint: tree.reduce(0) { $0 + (byPid[$1]?.footprint ?? 0) },
-                            treePids: tree)
+                            treePids: tree,
+                            cpuPercent: tree.reduce(0) { $0 + (cpuPercentByPid[$1] ?? 0) })
         }.sorted { $0.footprint > $1.footprint }
     }
 
@@ -245,7 +248,7 @@ enum SystemModel {
                                 rootPids: s.leftovers.map(\.pid),
                                 allPids: s.leftovers.flatMap(\.treePids),
                                 footprint: s.leftovers.reduce(0) { $0 + $1.footprint },
-                                cpuPercent: 0, helpers: 0))
+                                cpuPercent: s.leftovers.reduce(0) { $0 + $1.cpuPercent }, helpers: 0))
         }
         let sorted = verdict.byCPU ? all.sorted { $0.cpuPercent > $1.cpuPercent }
                                    : all.sorted { $0.footprint > $1.footprint }
@@ -257,7 +260,7 @@ enum SystemModel {
     static func snapshot(procs: [ProcSample], cpuPercentByPid: [Int32: Double], ownUid: uid_t,
                          now: Date, cpuPercent: Double, memUsed: UInt64, memTotal: UInt64,
                          swapUsed: UInt64, pressure: Level) -> SystemSnapshot {
-        let left = leftovers(procs, ownUid: ownUid, now: now)
+        let left = leftovers(procs, ownUid: ownUid, now: now, cpuPercentByPid: cpuPercentByPid)
         let orphaned = Set(left.flatMap(\.treePids))
         let groups = group(procs.filter { !orphaned.contains($0.pid) },
                            cpuPercentByPid: cpuPercentByPid, ownUid: ownUid)

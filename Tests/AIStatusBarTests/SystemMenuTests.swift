@@ -36,6 +36,19 @@ final class SystemMenuTests: XCTestCase {
         XCTAssertFalse(items.contains { $0.isHidden })
     }
 
+    func testActionTargetIsFrozenAtSubmenuBuild() throws {
+        let controller = SystemMenuController(mock: true)
+        let items = controller.items()
+        let quit = try XCTUnwrap(items[1].submenu?.items.first { $0.title == "Quit All 11" })
+        let target = try XCTUnwrap(quit.representedObject as? SystemMenuController.ActionTarget)
+        // Цель зафиксирована при построении сабменю: новый замер, пока меню
+        // открыто, не добавит в «Quit All 11» двенадцатую сессию.
+        XCTAssertEqual(target.consumer?.rootPids.count, 11)
+        let left = try XCTUnwrap(items[0].submenu?.items.first { $0.title.hasPrefix("Leftovers") }?.submenu)
+        let one = try XCTUnwrap(left.items.first { $0.title.hasPrefix("relay.py") })
+        XCTAssertEqual((one.representedObject as? SystemMenuController.ActionTarget)?.leftovers.map(\.pid), [7245])
+    }
+
     func testConfirmTitles() {
         let s = MockData.systemSnapshot
         XCTAssertEqual(SystemMenuController.confirmTitle(s.consumers[0], force: false),

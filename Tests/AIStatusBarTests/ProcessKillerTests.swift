@@ -19,9 +19,22 @@ final class ProcessKillerTests: XCTestCase {
         let c = Consumer(key: "agent:Claude Code", title: "Claude Code", kind: .agent,
                          rootPids: [12, 20], allPids: [12, 13, 20, 21], footprint: 0,
                          cpuPercent: 0, helpers: 2)
-        let procs = [p(12, 1), p(13, 12), p(20, 1), p(21, 20)]
-        XCTAssertEqual(ProcessKiller.forcePlan(c, procs: procs, ownPid: 99, ownUid: 501),
+        let procs = [p(12, 1), p(13, 12), p(20, 1), p(21, 20), p(99, 1)]
+        XCTAssertEqual(ProcessKiller.forcePlan(c, old: procs, fresh: procs, ownPid: 99, ownUid: 501),
                        [13, 21, 12, 20])
+    }
+
+    func testAncestryUsesFullFreshListAndFailsClosed() {
+        // claude 12 → zsh 30 → app 31. Shell 30 не было в старом снимке (родился
+        // позже) — защита предка 12 всё равно должна сработать по свежему списку.
+        let fresh = [p(12, 1), p(30, 12), p(31, 30), p(13, 12)]
+        let old = [p(12, 1), p(31, 30), p(13, 12)]
+        XCTAssertEqual(ProcessKiller.liveTargets([12, 13], old: old, fresh: fresh,
+                                                 ownPid: 31, ownUid: 501), [13])
+        // Цепочка своего процесса рвётся (родителя 30 нет в списке) — не трогаем никого.
+        let broken = [p(12, 1), p(31, 30), p(13, 12)]
+        XCTAssertEqual(ProcessKiller.liveTargets([13], old: broken, fresh: broken,
+                                                 ownPid: 31, ownUid: 501), [])
     }
 
     func testRecycledPidIsDropped() {

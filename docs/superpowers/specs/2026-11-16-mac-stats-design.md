@@ -90,6 +90,14 @@ listing with names and explicit clicks.
   Force Quit = SIGKILL descendants first, then roots (so nothing becomes a new leftover).
 - Agent groups and every Force Quit ask for confirmation (an agent session's work stops).
 - A leftover's Quit = SIGTERM to it and its descendants.
+- Every menu action carries an immutable target built with its submenu (pids + the process
+  snapshot they came from). At click time a fresh read must match pid **and** start time —
+  a sample that arrives while the menu is open can't widen «Quit All 11» to a 12th session,
+  and a recycled pid is never signalled (Codex review 16.11, P1).
+- Own-ancestor protection is computed from the full fresh process list; if the chain from
+  this app up to launchd has a gap, nothing is signalled (fail closed).
+- Per-consumer CPU is in percent of the whole machine (divided by core count), the same
+  scale as the «CPU N%» verdict; leftovers carry the CPU of their whole tree.
 
 ## Sampling
 

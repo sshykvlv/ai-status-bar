@@ -120,6 +120,17 @@ final class SystemModelTests: XCTestCase {
         XCTAssertTrue(SystemModel.leftovers(all, ownUid: me, now: now).isEmpty)
     }
 
+    func testLeftoverCarriesTreeCPU() {
+        let procs = [p(7245, 1, pgid: 7244, name: "node"), p(7247, 7245, pgid: 7244, name: "node")]
+        let left = SystemModel.leftovers(procs, ownUid: me, now: now,
+                                         cpuPercentByPid: [7245: 10, 7247: 30])
+        XCTAssertEqual(left.first?.cpuPercent, 40)
+        let s = SystemModel.snapshot(procs: procs, cpuPercentByPid: [7245: 10, 7247: 30], ownUid: me,
+                                     now: now, cpuPercent: 95, memUsed: 1, memTotal: 2, swapUsed: 0,
+                                     pressure: .normal)
+        XCTAssertEqual(SystemModel.top(s, verdict: Verdict(s)).first?.cpuPercent, 40)
+    }
+
     func testLeftoverMCPByName() {
         let left = SystemModel.leftovers([p(800, 1, pgid: 799, name: "mcp-server-ableton")],
                                          ownUid: me, now: now)

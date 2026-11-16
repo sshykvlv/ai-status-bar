@@ -279,6 +279,18 @@ final class SystemMenuController: NSObject {
         return item
     }
 
+    /// Неизменная цель пункта меню: кого гасить и по какому снимку процессов
+    /// (pid + время старта). Фиксируется при построении сабменю, поэтому
+    /// замер, пришедший пока меню открыто, не расширит «Quit All 11».
+    final class ActionTarget: NSObject {
+        let consumer: Consumer?
+        let leftovers: [Leftover]
+        let procs: [ProcSample]
+        init(consumer: Consumer? = nil, leftovers: [Leftover] = [], procs: [ProcSample]) {
+            self.consumer = consumer; self.leftovers = leftovers; self.procs = procs
+        }
+    }
+
     private func action(_ title: String, _ sel: Selector, _ object: Any? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: sel, keyEquivalent: "")
         item.target = self
@@ -324,8 +336,9 @@ final class SystemMenuController: NSObject {
         parts.append(ByteText.gb(c.footprint))
         sub.addItem(info(parts.joined(separator: " · ")))
         sub.addItem(.separator())
-        sub.addItem(action(n > 1 ? "Quit All \(n)" : "Quit", #selector(quitConsumer(_:)), c.key))
-        sub.addItem(action(n > 1 ? "Force Quit All \(n)" : "Force Quit", #selector(forceQuitConsumer(_:)), c.key))
+        let target = ActionTarget(consumer: c, procs: procs)
+        sub.addItem(action(n > 1 ? "Quit All \(n)" : "Quit", #selector(quitConsumer(_:)), target))
+        sub.addItem(action(n > 1 ? "Force Quit All \(n)" : "Force Quit", #selector(forceQuitConsumer(_:)), target))
         return sub
     }
 
@@ -336,11 +349,12 @@ final class SystemMenuController: NSObject {
         sub.addItem(.separator())
         for l in leftovers {
             let title = "\(l.label) — \(l.tool) · \(Self.age(l.age)) · \(ByteText.gb(l.footprint))"
-            sub.addItem(action(title, #selector(quitLeftover(_:)), l.pid))
+            sub.addItem(action(title, #selector(quitLeftovers(_:)), ActionTarget(leftovers: [l], procs: procs)))
         }
         if leftovers.count > 1 {
             sub.addItem(.separator())
-            sub.addItem(action("Quit All Leftovers", #selector(quitAllLeftovers)))
+            sub.addItem(action("Quit All Leftovers", #selector(quitLeftovers(_:)),
+                               ActionTarget(leftovers: leftovers, procs: procs)))
         }
         return sub
     }
@@ -354,15 +368,8 @@ final class SystemMenuController: NSObject {
 
     // MARK: actions
 
-    /// Свежие процессы, совпадающие со снимком по pid + времени старта.
-    private func liveProcs() -> [ProcSample] {
-        ProcessKiller.stillSame(old: procs, fresh: SystemSampler.readProcs())
-    }
-
-    private func consumer(for sender: NSMenuItem) -> Consumer? {
-        guard let key = sender.representedObject as? String, let s = snapshot else { return nil }
-        if key == "leftovers" { return currentTop().first { $0.key == key } }
-        return s.consumers.first { $0.key == key }
+    private func target(_ sender: NSMenuItem) -> ActionTarget? {
+        sender.representedObject as? ActionTarget
     }
 
     private func confirm(_ title: String) -> Bool {
@@ -384,32 +391,25 @@ final class SystemMenuController: NSObject {
     }
 
     @objc private func quitConsumer(_ sender: NSMenuItem) {
-        guard let c = consumer(for: sender) else { return }
+        guard let t = target(sender), let c = t.consumer else { return }
         if let title = Self.confirmTitle(c, force: false), !confirm(title) { return }
         guard !mock else { return }
-        ProcessKiller.quit(c, procs: liveProcs())
+        ProcessKiller.quit(c, old: t.procs, fresh: SystemSampler.readProcs())
         sampleSoon()
     }
 
     @objc private func forceQuitConsumer(_ sender: NSMenuItem) {
-        guard let c = consumer(for: sender),
+        guard let t = target(sender), let c = t.consumer,
               let title = Self.confirmTitle(c, force: true), confirm(title) else { return }
         guard !mock else { return }
-        ProcessKiller.forceQuit(c, procs: liveProcs())
+        ProcessKiller.forceQuit(c, old: t.procs, fresh: SystemSampler.readProcs())
         sampleSoon()
     }
 
-    @objc private func quitLeftover(_ sender: NSMenuItem) {
-        guard let pid = sender.representedObject as? Int32,
-              let l = snapshot?.leftovers.first(where: { $0.pid == pid }), !mock else { return }
-        ProcessKiller.quit(l, procs: liveProcs())
-        sampleSoon()
-    }
-
-    @objc private func quitAllLeftovers() {
-        guard let leftovers = snapshot?.leftovers, !mock else { return }
-        let live = liveProcs()
-        leftovers.forEach { ProcessKiller.quit($0, procs: live) }
+    @objc private func quitLeftovers(_ sender: NSMenuItem) {
+        guard let t = target(sender), !mock else { return }
+        let fresh = SystemSampler.readProcs()
+        t.leftovers.forEach { ProcessKiller.quit($0, old: t.procs, fresh: fresh) }
         sampleSoon()
     }
 

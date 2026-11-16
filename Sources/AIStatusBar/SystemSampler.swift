@@ -18,9 +18,12 @@ final class SystemSampler {
         let wall = lastAt.map { now.timeIntervalSince($0) } ?? 0
         var perPid: [Int32: Double] = [:]
         if wall > 0 {
+            // В процентах всей машины (как общий CPU), а не одного ядра:
+            // иначе строка «400%» спорит с вердиктом «CPU 40%».
+            let cores = Double(max(ProcessInfo.processInfo.activeProcessorCount, 1))
             for p in procs {
                 if let prev = lastCPUTime[p.pid], p.cpuTime >= prev {
-                    perPid[p.pid] = (p.cpuTime - prev) / wall * 100
+                    perPid[p.pid] = (p.cpuTime - prev) / wall / cores * 100
                 }
             }
         }
