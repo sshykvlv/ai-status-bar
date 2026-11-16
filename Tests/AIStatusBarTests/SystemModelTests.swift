@@ -159,6 +159,17 @@ final class SystemModelTests: XCTestCase {
                        Verdict(text: "RAM 18/24 GB", level: .warn, byCPU: false))
     }
 
+    func testMacChipsShowBothAndColourOnlyTheBadOne() {
+        XCTAssertEqual(MacChips(snap(cpu: 54, used: 18)),
+                       MacChips(cpu: .init(text: "CPU 54%", level: .normal),
+                                memory: .init(text: "RAM 18/24 GB", level: .normal)))
+        XCTAssertEqual(MacChips(snap(cpu: 74, pressure: .critical, used: 23, swap: 16)),
+                       MacChips(cpu: .init(text: "CPU 74%", level: .warn),
+                                memory: .init(text: "RAM 23/24 GB", level: .critical)))
+        XCTAssertEqual(MacChips(snap(cpu: 96)).cpu.level, .critical)
+        XCTAssertEqual(MacChips(snap(cpu: 96)).memory.level, .normal)
+    }
+
     private func c(_ title: String, gb: Double, cpu: Double = 0) -> Consumer {
         Consumer(key: title, title: title, kind: .process, rootPids: [1], allPids: [1],
                  footprint: UInt64(gb * 1_073_741_824), cpuPercent: cpu, helpers: 0)

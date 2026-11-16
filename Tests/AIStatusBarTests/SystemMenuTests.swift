@@ -9,7 +9,7 @@ final class SystemMenuTests: XCTestCase {
     func testMenuItemsShape() throws {
         let items = SystemMenuController(mock: true).items()
         XCTAssertEqual(items.count, 1 + SystemModel.visibleConsumers)
-        XCTAssertEqual(items[0].title, "Mac — Swap 16 GB")
+        XCTAssertEqual(items[0].title, "Mac — CPU 74% · RAM 27/32 GB")
         XCTAssertEqual(items.dropFirst().map(\.title), ["Claude Code", "Google Chrome", "Codex"])
 
         let summary = titles(items[0].submenu)

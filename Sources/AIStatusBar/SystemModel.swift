@@ -103,6 +103,32 @@ struct Verdict: Equatable {
     }
 }
 
+/// Сводка «Mac» — два чипа сразу, CPU и память (фидбэк владельца 16.11:
+/// «показывать и ЦПУ, и память одновременно, красной плашкой — именно то, что
+/// не в порядке»). Каждый чип окрашивается своей тревогой: CPU — порогами
+/// 70/90, память — memory pressure ядра. Своп — в сабменю.
+struct MacChips: Equatable {
+    struct Chip: Equatable {
+        var text: String
+        var level: Level
+    }
+    var cpu: Chip
+    var memory: Chip
+
+    init(cpu: Chip, memory: Chip) { self.cpu = cpu; self.memory = memory }
+
+    init(_ s: SystemSnapshot) {
+        let pct = Int(s.cpuPercent.rounded())
+        cpu = Chip(text: "CPU \(pct)%",
+                   level: s.cpuPercent >= 90 ? .critical : s.cpuPercent >= 70 ? .warn : .normal)
+        memory = Chip(text: String(format: "RAM %.0f/%.0f GB", Double(s.memUsed) / ByteText.gib,
+                                   Double(s.memTotal) / ByteText.gib),
+                      level: s.pressure)
+    }
+
+    var title: String { "\(cpu.text) · \(memory.text)" }
+}
+
 enum ByteText {
     static let gib = 1_073_741_824.0
     static func gb(_ bytes: UInt64) -> String {

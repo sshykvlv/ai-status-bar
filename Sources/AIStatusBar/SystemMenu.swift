@@ -5,44 +5,63 @@ import SwiftUI
 // владельцем 16.11 (живой спайк + минималистичный проход Fable), см.
 // docs/superpowers/specs/2026-11-16-mac-stats-design.md.
 
-/// Сводка: «Mac» + один чип-вердикт. Цвет только у тревоги — залитая плашка
-/// (asbWarnFill с тёмным текстом / asbDangerFill с белым, ≥4.5:1), в покое — серый чип.
+/// Сводка: «Mac» + два чипа, CPU и RAM. Цвет только у того, что не в порядке:
+/// мягкая оранжевая плашка с тёмным текстом / красная с белым (≥4.5:1); в
+/// покое — серый чип, как у окон лимитов.
 struct MacSummaryRow: View {
-    let verdict: Verdict?
+    let chips: MacChips?
     @State private var hovered = false
-
-    private var alertFill: Color? {
-        switch verdict?.level {
-        case .warn: return Color(nsColor: .asbWarnFill)
-        case .critical: return Color(nsColor: .asbDangerFill)
-        default: return nil
-        }
-    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text("Mac").font(.system(size: 12.5, weight: .medium))
                 .foregroundColor(hovered ? .white : .primary)
             Spacer(minLength: 12)
-            Text(verdict?.text ?? "—")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(verdict?.level == .warn ? Color(nsColor: .asbWarnFillText)
-                                 : hovered || alertFill != nil ? .white : Color(nsColor: .secondaryLabelColor))
-                .monospacedDigit()
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.horizontal, SystemRowMetrics.chipInset)
-                // Асимметрия — тот же квирк лидинга NSMenu, что у WindowChip.
-                .padding(.top, 3)
-                .padding(.bottom, 2)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(alertFill ?? (hovered ? Color.white.opacity(0.18)
-                                        : Color(nsColor: .quaternarySystemFill))))
+            HStack(spacing: 6) {
+                StatChip(chip: chips?.cpu, hovered: hovered)
+                StatChip(chip: chips?.memory, hovered: hovered)
+            }
             SystemChevron(hovered: hovered)
         }
         .systemRow(hovered: $hovered)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Mac, \(verdict?.text ?? "loading")"))
+        .accessibilityLabel(Text("Mac, \(chips?.title ?? "loading")"))
+    }
+}
+
+private struct StatChip: View {
+    let chip: MacChips.Chip?
+    let hovered: Bool
+
+    private var fill: Color? {
+        switch chip?.level {
+        case .warn: return Color(nsColor: .asbWarnFill)
+        case .critical: return Color(nsColor: .asbDangerFill)
+        default: return nil
+        }
+    }
+
+    private var textColor: Color {
+        switch chip?.level {
+        case .warn: return Color(nsColor: .asbWarnFillText)
+        case .critical: return .white
+        default: return hovered ? .white : Color(nsColor: .secondaryLabelColor)
+        }
+    }
+
+    var body: some View {
+        Text(chip?.text ?? "—")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(textColor)
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, SystemRowMetrics.chipInset)
+            // Асимметрия — тот же квирк лидинга NSMenu, что у WindowChip.
+            .padding(.top, 3)
+            .padding(.bottom, 2)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(fill ?? (hovered ? Color.white.opacity(0.18) : Color(nsColor: .quaternarySystemFill))))
     }
 }
 
@@ -198,7 +217,9 @@ final class SystemMenuController: NSObject {
         }
     }
 
+    /// Verdict решает только порядок строк (по памяти или по CPU).
     private var verdict: Verdict? { snapshot.map(Verdict.init) }
+    private var chips: MacChips? { snapshot.map(MacChips.init) }
 
     private func currentTop() -> [Consumer] {
         guard let snapshot, let verdict else { return [] }
@@ -212,7 +233,7 @@ final class SystemMenuController: NSObject {
     /// чтобы обновление на месте никогда не меняло высоту открытого меню.
     func items() -> [NSMenuItem] {
         let summary = NSMenuItem()
-        summary.view = Self.host(MacSummaryRow(verdict: verdict))
+        summary.view = Self.host(MacSummaryRow(chips: chips))
         summaryItem = summary
         consumerItems = (0..<SystemModel.visibleConsumers).map { _ in
             let item = NSMenuItem()
@@ -244,8 +265,8 @@ final class SystemMenuController: NSObject {
     }
 
     private func updateSummary() {
-        (summaryItem?.view as? NSHostingView<MacSummaryRow>)?.rootView = MacSummaryRow(verdict: verdict)
-        summaryItem?.title = "Mac — \(verdict?.text ?? "loading")"
+        (summaryItem?.view as? NSHostingView<MacSummaryRow>)?.rootView = MacSummaryRow(chips: chips)
+        summaryItem?.title = "Mac — \(chips?.title ?? "loading")"
     }
 
     /// Новый замер. Меню закрыто — полное заполнение; открыто — только цифры

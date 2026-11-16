@@ -47,6 +47,11 @@ Codex ×3                        2.1 GB  ›
 
 ## Verdict rule
 
+**Update 16.11 (owner, after the live build):** the summary shows **two chips at once —
+`CPU N%` and `RAM u/t GB`** — and colours only the one that is in trouble (CPU by 70/90,
+RAM by memory pressure). Swap moved to the «Mac» submenu. The verdict below now only
+decides whether the consumer rows rank by memory or by CPU.
+
 - Memory alarm comes from `kern.memorystatus_vm_pressure_level` (1 normal, 2 warn,
   4 critical), not from «% RAM used» — macOS keeps RAM full on purpose, and swap used is
   history (observed 16.11: 9 GB swap with pressure normal).

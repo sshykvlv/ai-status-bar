@@ -36,7 +36,7 @@ Each chip is labelled with its window — `5h` or `7d`. At 70% and above it turn
 
 When agents make the Mac crawl, the **Mac** block under the accounts tells you why without asking them:
 
-- **Mac** shows one chip naming the bottleneck — `Swap 16 GB` when memory pressure is high, `CPU 95%` when the processor is, a grey `RAM 18/24 GB` when all is calm. Its submenu has memory, swap and CPU, plus **Open Activity Monitor**.
+- **Mac** shows two chips, `CPU 54%` and `RAM 18/24 GB`. Only the one that is in trouble lights up: CPU turns orange at 70% and red at 90%, RAM follows macOS memory pressure. Its submenu has memory, swap and CPU, plus **Open Activity Monitor**.
 - The three rows below are the biggest consumers. Agent sessions absorb their helpers (`Claude Code ×6 — 6.4 GB` includes every MCP server and `node` they started); apps absorb their helper processes. When CPU is the bottleneck, the rows rank by CPU instead.
 - Each row's submenu has **Quit** and **Force Quit**. Agent sessions and every force quit ask first.
 - **Leftovers** are agent helpers whose session already exited (parent gone, its process group dead, a `node`/`python`/`uv`/MCP tool). They are listed by script name — some may be servers you detached on purpose, so nothing is killed until you click.
