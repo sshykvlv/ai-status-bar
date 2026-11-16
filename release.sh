@@ -31,7 +31,15 @@ fi
 # 0.5) tests — NOT `swift test` (hangs on a Keychain dialog); xctest directly
 echo "🧪 Running tests…"
 swift build --build-tests
-TEST_OUT="$(xcrun xctest .build/arm64-apple-macosx/debug/AIStatusBarPackageTests.xctest 2>&1 | grep -E 'Executed [0-9]+ tests, with' | tail -1)"
+# Путь к бандлу — через --show-bin-path, а не хардкодом: Swift 6.4 сменил
+# раскладку на .build/out/Products/Debug/<Target>Tests.xctest, и старый путь
+# молча ронял релиз (set -e + pipefail, без сообщения).
+TEST_BUNDLE="$(find "$(swift build --show-bin-path)" -maxdepth 1 -name '*.xctest' | head -1)"
+if [ -z "$TEST_BUNDLE" ]; then
+    echo "❌ Test bundle not found under $(swift build --show-bin-path) — aborting release." >&2
+    exit 1
+fi
+TEST_OUT="$(xcrun xctest "$TEST_BUNDLE" 2>&1 | grep -E 'Executed [0-9]+ tests, with' | tail -1 || true)"
 echo "   $TEST_OUT"
 case "$TEST_OUT" in
     # Matched without the "with" prefix — a real run always has 2 skipped tests
