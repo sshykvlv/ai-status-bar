@@ -30,7 +30,7 @@ If a provider omits a usage window or its percentage, the app shows no data (`â€
 
 Open an account submenu to see reset times, forecasts, connection status, and when the displayed data was last updated. VoiceOver announces the same window values, status, and freshness from the compact account row.
 
-Usage windows at 70% and above turn into orange plates, at 90% into red ones, with white text that stays readable in light and dark mode.
+Each chip is labelled with its window â€” `5h` or `7d`. At 70% and above it turns into a soft orange plate, at 90% into a red one; text on both stays readable in light and dark mode.
 
 ### Mac stats
 

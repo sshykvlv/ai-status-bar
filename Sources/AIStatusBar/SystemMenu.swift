@@ -6,7 +6,7 @@ import SwiftUI
 // docs/superpowers/specs/2026-11-16-mac-stats-design.md.
 
 /// Сводка: «Mac» + один чип-вердикт. Цвет только у тревоги — залитая плашка
-/// (asbWarnFill/asbDangerFill, белый текст ≥4.5:1), в покое — серый чип.
+/// (asbWarnFill с тёмным текстом / asbDangerFill с белым, ≥4.5:1), в покое — серый чип.
 struct MacSummaryRow: View {
     let verdict: Verdict?
     @State private var hovered = false
@@ -26,7 +26,8 @@ struct MacSummaryRow: View {
             Spacer(minLength: 12)
             Text(verdict?.text ?? "—")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(hovered || alertFill != nil ? .white : Color(nsColor: .secondaryLabelColor))
+                .foregroundColor(verdict?.level == .warn ? Color(nsColor: .asbWarnFillText)
+                                 : hovered || alertFill != nil ? .white : Color(nsColor: .secondaryLabelColor))
                 .monospacedDigit()
                 .lineLimit(1)
                 .fixedSize()

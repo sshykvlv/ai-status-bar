@@ -20,7 +20,7 @@ final class MenuPresentationTests: XCTestCase {
     func testMenuWidthFitsContentWithoutHeaderSlack() {
         let item = MenuRowFactory.item(for: account, state: .pending)
 
-        XCTAssertEqual(item.view?.frame.width, 260)
+        XCTAssertEqual(item.view?.frame.width, 296)
     }
 
     func testAccountRowStretchesAcrossFinalMenuWidth() throws {

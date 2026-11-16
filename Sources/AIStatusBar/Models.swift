@@ -109,7 +109,11 @@ extension NSColor {
     /// Залитые плашки порогов (фидбэк владельца 16.11: «инвертировать на плашку
     /// такого цвета»). Текст на них белый; заливка одна для обеих тем, подобрана
     /// под белый ≥4.5:1 — systemOrange с белым даёт 2.1:1, поэтому он темнее.
-    static let asbWarnFill = NSColor(srgbRed: 0xB8 / 255, green: 0x5A / 255, blue: 0.0, alpha: 1.0)     // 4.7:1
+    /// 16.11 (фидбэк владельца «оранжевый понежнее, гамма с coolors»): Sandy
+    /// Brown #F4A261 из палитры 264653·2a9d8f·e9c46a·f4a261·e76f51. Белый на нём —
+    /// 2.1:1, поэтому текст тёмно-коричневый `asbWarnFillText` (6.6:1).
+    static let asbWarnFill = NSColor(srgbRed: 0xF4 / 255, green: 0xA2 / 255, blue: 0x61 / 255, alpha: 1.0)
+    static let asbWarnFillText = NSColor(srgbRed: 0x4A / 255, green: 0x24 / 255, blue: 0.0, alpha: 1.0)
     static let asbDangerFill = NSColor(srgbRed: 0xD9 / 255, green: 0x2D / 255, blue: 0x20 / 255, alpha: 1.0) // 4.8:1
 
     static let asbDanger = NSColor(name: nil) { appearance in
