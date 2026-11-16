@@ -171,9 +171,13 @@ final class SystemMenuController: NSObject {
 
     private func schedule(interval: TimeInterval) {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.sampleNow() }
         }
+        // .common: пока меню открыто, runloop крутится в режиме трекинга меню —
+        // таймер в .default там не срабатывает, и 2-секундное обновление молчит.
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     private func sampleNow() {
