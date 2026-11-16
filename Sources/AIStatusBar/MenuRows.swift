@@ -98,7 +98,7 @@ struct AccountRowView: View {
                 .padding(.leading, 2)
         }
         .padding(.horizontal, 12)
-        // rowWidth (296pt) задаёт компактную исходную ширину меню. После того как AppKit
+        // rowWidth (316pt) задаёт компактную исходную ширину меню. После того как AppKit
         // добавляет системные поля и колонку сабменю, строка растягивается на всю
         // получившуюся ширину — подсветка и стрелка доходят до правого края.
         .frame(minWidth: MenuRowFactory.rowWidth, maxWidth: .infinity,
@@ -129,8 +129,8 @@ struct AccountRowView: View {
     @ViewBuilder
     private func windows(usage: Usage?) -> some View {
         HStack(spacing: 6) {
-            WindowChip(title: "5-hour window", short: "5h", window: usage?.fiveHour, hovered: hovered)
-            WindowChip(title: "Weekly window", short: "7d", window: usage?.sevenDay, hovered: hovered)
+            WindowChip(title: "5-hour window", short: "5H", window: usage?.fiveHour, hovered: hovered)
+            WindowChip(title: "Weekly window", short: "7D", window: usage?.sevenDay, hovered: hovered)
         }
         // Кластер окон не сжимается — при длинной identity усекается она, не цифры.
         .layoutPriority(1)
@@ -164,9 +164,9 @@ enum ResetClock {
 /// заливка quaternary — как системные чипы.
 private struct WindowChip: View {
     let title: String
-    /// Метка окна внутри чипа (фидбэк 16.11: «помечать, что это за лимит»):
-    /// «5h» / «7d» — так окна называют сами Claude и Codex. Тоньше и мельче
-    /// цифры, чтобы главной оставался процент.
+    /// Метка окна внутри чипа (фидбэк 16.11: «помечать, что это за лимит»;
+    /// затем «капсом, через точку по центру»): «5H · 42%», «7D · 87%». Метка и
+    /// точка тоньше и мельче цифры, чтобы главным оставался процент.
     let short: String
     let window: UsageWindow?
     var hovered: Bool = false
@@ -223,7 +223,7 @@ private struct WindowChip: View {
                     .font(.system(size: 8.5, weight: .semibold))
                     .foregroundStyle(plateText ?? (hovered ? Color.white : Color(nsColor: .asbWarn)))
             }
-            (Text(short + " ")
+            (Text(short + " · ")
                 .font(.system(size: 10))
                 .foregroundColor(plateText ?? (hovered ? .white : Color(nsColor: .secondaryLabelColor)))
              + Text(window.map { "\(Int($0.utilization))%" } ?? "—")
@@ -257,9 +257,9 @@ private struct WindowChip: View {
 }
 
 enum MenuRowFactory {
-    // 296 (было 260): метки «5h»/«7d» в чипах (16.11) добавили ~36pt —
+    // 316 (было 260): метки «5H · »/«7D · » в чипах (16.11) добавили ~56pt —
     // без запаса identity аккаунта («sasha@example.com») усекалась.
-    static let rowWidth: CGFloat = 296
+    static let rowWidth: CGFloat = 316
     // Одна текстовая строка 12.5pt + по ~5pt воздуха сверху/снизу (V2-B,
     // выбор владельца 12.07 — ниже и плотнее двухстрочного варианта).
     static let rowHeight: CGFloat = 25
