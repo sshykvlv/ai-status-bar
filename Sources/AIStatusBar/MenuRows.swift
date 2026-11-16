@@ -184,11 +184,18 @@ private struct WindowChip: View {
         return window.utilization <= 99 && window.projectedExhaustion != nil
     }
 
+    /// ≥70 / ≥90 — залитая плашка с белым текстом (фидбэк 16.11: цветная цифра
+    /// на сером чипе читалась плохо, заливка видна издалека).
+    private var alertFill: Color? {
+        guard let util = window?.utilization else { return nil }
+        if util >= 90 { return Color(nsColor: .asbDangerFill) }
+        if util >= 70 { return Color(nsColor: .asbWarnFill) }
+        return nil
+    }
+
     private var percentColor: Color {
-        if hovered { return .white }
-        guard let util = window?.utilization else { return Color(nsColor: .tertiaryLabelColor) }
-        if util >= 90 { return Color(nsColor: .systemRed) }
-        if util >= 70 { return Color(nsColor: .asbWarn) }
+        if hovered || alertFill != nil { return .white }
+        guard window != nil else { return Color(nsColor: .tertiaryLabelColor) }
         return Color(nsColor: .secondaryLabelColor)
     }
 
@@ -202,7 +209,7 @@ private struct WindowChip: View {
             if forecast {
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 8.5, weight: .semibold))
-                    .foregroundStyle(hovered ? Color.white : Color(nsColor: .asbWarn))
+                    .foregroundStyle(hovered || alertFill != nil ? Color.white : Color(nsColor: .asbWarn))
             }
             (Text(window.map { "\(Int($0.utilization))%" } ?? "—")
                 .font(.system(size: 11, weight: .semibold))
@@ -210,7 +217,9 @@ private struct WindowChip: View {
              + Text(resetSuffix)
                 .font(.system(size: 11))
                 // На выделенной (синей) строке серые тексты теряют контраст — в белый.
-                .foregroundColor(hovered ? .white.opacity(0.85) : Color(nsColor: .secondaryLabelColor)))
+                // На залитой плашке — чистый белый: white@0.85 на #D92D20 даёт ~3.9:1.
+                .foregroundColor(alertFill != nil ? .white
+                                 : hovered ? .white.opacity(0.85) : Color(nsColor: .secondaryLabelColor)))
                 .monospacedDigit()
                 .lineLimit(1)
                 .fixedSize()
@@ -224,7 +233,9 @@ private struct WindowChip: View {
         .padding(.bottom, 2)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(hovered ? Color.white.opacity(0.18) : Self.chipFill)
+                // Залитая плашка остаётся залитой и на выделенной строке —
+                // уровень тревоги не должен пропадать под курсором.
+                .fill(alertFill ?? (hovered ? Color.white.opacity(0.18) : Self.chipFill))
         )
         .help(MenuPresentation.windowTooltip(title: title, window: window))
     }
