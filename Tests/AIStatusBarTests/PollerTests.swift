@@ -28,7 +28,7 @@ final class PollerTests: XCTestCase {
     @MainActor
     func testUnauthorizedAccountBacksOffAcrossForcedPolls() async {
         let store = AccountStore(defaults: UserDefaults(suiteName: "aistatusbar.test.\(UUID().uuidString)")!,
-                                 hasClaudeMain: { false }, hasCodex: { false })
+                                 hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         let id = UUID()
         store.add(Account(id: id, name: "Test Claude", kind: .claudeMain, email: nil,
                           claudeConfigDir: "/tmp/aistatusbar-test-nonexistent-\(UUID().uuidString)"))
@@ -54,7 +54,7 @@ final class PollerTests: XCTestCase {
     @MainActor
     func testConcurrentForcedPollsFetchEachAccountOnlyOnce() async {
         let store = AccountStore(defaults: UserDefaults(suiteName: "aistatusbar.test.\(UUID().uuidString)")!,
-                                 hasClaudeMain: { false }, hasCodex: { false })
+                                 hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         store.add(Account(id: UUID(), name: "Test", kind: .claudeMain, email: nil,
                           claudeConfigDir: "/unused-because-fetch-is-injected"))
         let fetcher = SuspendedUsageFetcher()
@@ -188,7 +188,7 @@ final class PollerTests: XCTestCase {
     @MainActor
     private func makeStore() -> AccountStore {
         AccountStore(defaults: UserDefaults(suiteName: "aistatusbar.test.\(UUID().uuidString)")!,
-                     hasClaudeMain: { false }, hasCodex: { false })
+                     hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
     }
 }
 
@@ -276,20 +276,46 @@ final class AccountStoreTests: XCTestCase {
 
     func testDiscoversNoBuiltinsWhenAbsent() {
         let store = AccountStore(defaults: ephemeralDefaults(),
-                                 hasClaudeMain: { false }, hasCodex: { false })
+                                 hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         XCTAssertTrue(store.accounts.isEmpty)
     }
 
     func testDiscoversClaudeMainAndCodex() {
         let store = AccountStore(defaults: ephemeralDefaults(),
-                                 hasClaudeMain: { true }, hasCodex: { true })
+                                 hasClaudeMain: { true }, hasCodex: { true }, hasGrok: { false })
         XCTAssertEqual(store.accounts.first?.kind, .claudeMain)
         XCTAssertEqual(store.accounts.last?.kind, .codex)
     }
 
+    func testDiscoversGrokAfterCodex() {
+        let store = AccountStore(defaults: ephemeralDefaults(),
+                                 hasClaudeMain: { true }, hasCodex: { true }, hasGrok: { true })
+        XCTAssertEqual(store.accounts.map(\.kind), [.claudeMain, .codex, .grok])
+    }
+
+    func testGrokStaysLastWhenOtherAccountsAreAdded() {
+        let store = AccountStore(defaults: ephemeralDefaults(),
+                                 hasClaudeMain: { false }, hasCodex: { true }, hasGrok: { true })
+        store.add(Account(id: UUID(), name: "Claude 2", kind: .claudeOAuth, email: nil))
+        XCTAssertEqual(store.accounts.map(\.kind), [.claudeOAuth, .codex, .grok])
+    }
+
+    func testRemovingBuiltinGrokDismissesItPermanently() throws {
+        let defaults = ephemeralDefaults()
+        let store = AccountStore(defaults: defaults,
+                                 hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { true })
+        let id = try XCTUnwrap(store.accounts.first(where: { $0.kind == .grok })?.id)
+        store.remove(id: id)
+
+        let restarted = AccountStore(defaults: defaults,
+                                     hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { true })
+        XCTAssertTrue(store.dismissedBuiltins.contains(AccountKind.grok.rawValue))
+        XCTAssertFalse(restarted.accounts.contains { $0.kind == .grok })
+    }
+
     func testAddKeepsCodexLast() {
         let store = AccountStore(defaults: ephemeralDefaults(),
-                                 hasClaudeMain: { false }, hasCodex: { true })
+                                 hasClaudeMain: { false }, hasCodex: { true }, hasGrok: { false })
         store.add(Account(id: UUID(), name: "Claude 2", kind: .claudeOAuth, email: nil))
         XCTAssertEqual(store.accounts.last?.kind, .codex)
         XCTAssertEqual(store.accounts.first?.kind, .claudeOAuth)
@@ -297,16 +323,16 @@ final class AccountStoreTests: XCTestCase {
 
     func testPersistenceRoundtrip() {
         let d = ephemeralDefaults()
-        let store1 = AccountStore(defaults: d, hasClaudeMain: { false }, hasCodex: { false })
+        let store1 = AccountStore(defaults: d, hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         let id = UUID()
         store1.add(Account(id: id, name: "Extra", kind: .claudeOAuth, email: "a@b.c"))
-        let store2 = AccountStore(defaults: d, hasClaudeMain: { false }, hasCodex: { false })
+        let store2 = AccountStore(defaults: d, hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         XCTAssertEqual(store2.accounts.first(where: { $0.id == id })?.name, "Extra")
     }
 
     func testMigratingBuiltinCodexPreservesRowAndPreventsRediscovery() throws {
         let defaults = ephemeralDefaults()
-        let store = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { true })
+        let store = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { true }, hasGrok: { false })
         let original = try XCTUnwrap(store.accounts.first(where: { $0.kind == .codex }))
         let originalIndex = try XCTUnwrap(store.accounts.firstIndex(where: { $0.id == original.id }))
 
@@ -322,14 +348,14 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertEqual(store.accounts.firstIndex(where: { $0.id == original.id }), originalIndex)
         XCTAssertTrue(store.dismissedBuiltins.contains(AccountKind.codex.rawValue))
 
-        let restarted = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { true })
+        let restarted = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { true }, hasGrok: { false })
         XCTAssertEqual(restarted.accounts.filter { $0.kind == .codexOAuth }.count, 1)
         XCTAssertFalse(restarted.accounts.contains { $0.kind == .codex })
     }
 
     func testMigratingBuiltinClaudePreservesRowAndPreventsRediscovery() throws {
         let defaults = ephemeralDefaults()
-        let store = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false })
+        let store = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false }, hasGrok: { false })
         let original = try XCTUnwrap(store.accounts.first)
 
         store.migrateToOwned(id: original.id, kind: .claudeOAuth,
@@ -342,13 +368,13 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertNil(migrated.claudeConfigDir)
         XCTAssertTrue(store.dismissedBuiltins.contains(AccountKind.claudeMain.rawValue))
 
-        let restarted = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false })
+        let restarted = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false }, hasGrok: { false })
         XCTAssertEqual(restarted.accounts.map(\.kind), [.claudeOAuth])
     }
 
     func testReconnectWithoutReturnedIdentityKeepsKnownIdentity() throws {
         let store = AccountStore(defaults: ephemeralDefaults(),
-                                 hasClaudeMain: { false }, hasCodex: { false })
+                                 hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         let id = UUID()
         store.add(Account(id: id, name: "Work", kind: .codex,
                           email: "known@ykv.lv", plan: "Pro",
@@ -363,7 +389,7 @@ final class AccountStoreTests: XCTestCase {
 
     func testRenameAndRemove() {
         let store = AccountStore(defaults: ephemeralDefaults(),
-                                 hasClaudeMain: { false }, hasCodex: { false })
+                                 hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         let id = UUID()
         store.add(Account(id: id, name: "Old", kind: .claudeOAuth, email: nil))
         store.rename(id: id, to: "New")
@@ -374,7 +400,7 @@ final class AccountStoreTests: XCTestCase {
 
     func testSetEmailPersistsEmailAndPlan() {
         let store = AccountStore(defaults: ephemeralDefaults(),
-                                 hasClaudeMain: { false }, hasCodex: { false })
+                                 hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         let id = UUID()
         store.add(Account(id: id, name: "Claude", kind: .claudeMain, email: nil))
         store.setEmail(id: id, "sasha@ykv.lv", plan: "Max 20x")
@@ -384,12 +410,12 @@ final class AccountStoreTests: XCTestCase {
 
     func testRemovingBuiltinDismissesItPermanently() throws {
         let defaults = ephemeralDefaults()
-        let store1 = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false })
+        let store1 = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false }, hasGrok: { false })
         let id = try XCTUnwrap(store1.accounts.first(where: { $0.kind == .claudeMain })?.id)
         store1.remove(id: id)
         XCTAssertTrue(store1.accounts.isEmpty)
         // Restart with the same "builtin present" signal — dismissal must stick.
-        let store2 = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false })
+        let store2 = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false }, hasGrok: { false })
         XCTAssertFalse(store2.accounts.contains { $0.kind == .claudeMain })
     }
 
@@ -397,14 +423,14 @@ final class AccountStoreTests: XCTestCase {
     // dismiss the auto-detected builtin Codex — only the builtin (codexHome == nil) does.
     func testRemovingAddedCodexDoesNotDismissBuiltin() throws {
         let defaults = ephemeralDefaults()
-        let store = AccountStore(defaults: defaults, hasClaudeMain: { false }, hasCodex: { true })
+        let store = AccountStore(defaults: defaults, hasClaudeMain: { false }, hasCodex: { true }, hasGrok: { false })
         let addedID = UUID()
         store.add(Account(id: addedID, name: "Work", kind: .codex, email: nil,
                           codexHome: "/tmp/second-codex-home"))
         store.remove(id: addedID)
         XCTAssertFalse(store.dismissedBuiltins.contains(AccountKind.codex.rawValue))
         // Builtin codex is still present after a restart.
-        let store2 = AccountStore(defaults: defaults, hasClaudeMain: { false }, hasCodex: { true })
+        let store2 = AccountStore(defaults: defaults, hasClaudeMain: { false }, hasCodex: { true }, hasGrok: { false })
         XCTAssertTrue(store2.accounts.contains { $0.kind == .codex && $0.codexHome == nil })
     }
 
@@ -412,14 +438,14 @@ final class AccountStoreTests: XCTestCase {
     // dismiss the auto-detected builtin claudeMain — only the builtin (configDir == nil) does.
     func testRemovingAddedClaudeCLIProfileDoesNotDismissBuiltin() throws {
         let defaults = ephemeralDefaults()
-        let store = AccountStore(defaults: defaults, hasClaudeMain: { false }, hasCodex: { false })
+        let store = AccountStore(defaults: defaults, hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         let addedID = UUID()
         store.add(Account(id: addedID, name: "Claude 2", kind: .claudeMain, email: nil,
                           claudeConfigDir: "/tmp/second-claude-home"))
         store.remove(id: addedID)
         XCTAssertFalse(store.dismissedBuiltins.contains(AccountKind.claudeMain.rawValue))
         // Builtin claudeMain is still discoverable after a restart.
-        let store2 = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false })
+        let store2 = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false }, hasGrok: { false })
         XCTAssertTrue(store2.accounts.contains { $0.kind == .claudeMain && $0.claudeConfigDir == nil })
     }
 
@@ -428,11 +454,11 @@ final class AccountStoreTests: XCTestCase {
     // substitute for the default ~/.claude one.
     func testBuiltinClaudeMainCoexistsWithCLIProfile() {
         let defaults = ephemeralDefaults()
-        let store = AccountStore(defaults: defaults, hasClaudeMain: { false }, hasCodex: { false })
+        let store = AccountStore(defaults: defaults, hasClaudeMain: { false }, hasCodex: { false }, hasGrok: { false })
         store.add(Account(id: UUID(), name: "Claude 2", kind: .claudeMain, email: nil,
                           claudeConfigDir: "/tmp/second-claude-home"))
         // Restart with the default builtin now present too.
-        let store2 = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false })
+        let store2 = AccountStore(defaults: defaults, hasClaudeMain: { true }, hasCodex: { false }, hasGrok: { false })
         XCTAssertTrue(store2.accounts.contains { $0.kind == .claudeMain && $0.claudeConfigDir == nil })
         XCTAssertTrue(store2.accounts.contains { $0.claudeConfigDir == "/tmp/second-claude-home" })
     }

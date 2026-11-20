@@ -180,9 +180,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let rename = NSMenuItem(title: "Rename…", action: #selector(renameAccount(_:)), keyEquivalent: "")
         rename.target = self; rename.representedObject = account.id
         sub.addItem(rename)
-        let relogin = NSMenuItem(title: "Sign in again…", action: #selector(reloginAccount(_:)), keyEquivalent: "")
-        relogin.target = self; relogin.representedObject = account.id
-        sub.addItem(relogin)
+        if AccountActionPolicy.provider(for: account.kind) != nil {
+            let relogin = NSMenuItem(title: "Sign in again…", action: #selector(reloginAccount(_:)), keyEquivalent: "")
+            relogin.target = self; relogin.representedObject = account.id
+            sub.addItem(relogin)
+        }
         sub.addItem(.separator())
         let remove = NSMenuItem(title: "Remove Account…", action: #selector(removeAccount(_:)), keyEquivalent: "")
         remove.target = self; remove.representedObject = account.id
@@ -198,7 +200,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // «Claude Code»). Identity — контрастная, сервис · тариф — вторичным.
         let identity = AccountRowView.resolvedName(name: account.name, email: account.email)
         sub.addItem(infoItem(identity, color: .labelColor, semiboldPrefix: identity))
-        let service = account.kind.isCodex ? "Codex" : "Claude Code"
+        let service: String
+        switch account.kind {
+        case .claudeMain, .claudeOAuth: service = "Claude Code"
+        case .codex, .codexOAuth: service = "Codex"
+        case .grok: service = "Grok"
+        }
         sub.addItem(infoItem(account.plan.map { "\(service) · \($0)" } ?? service, color: .secondaryLabelColor))
         sub.addItem(.separator())
 
@@ -388,10 +395,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.render()
         }
         switch AccountActionPolicy.provider(for: account.kind) {
-        case .claude:
+        case .claude?:
             OAuthFlow.shared.start(store: store, reloginID: id, onDone: onDone)
-        case .codex:
+        case .codex?:
             CodexOAuthFlow.shared.start(store: store, reloginID: id, onDone: onDone)
+        case nil:
+            return
         }
     }
     @objc private func removeAccount(_ sender: NSMenuItem) {
@@ -400,7 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Remove \(AccountRowView.resolvedName(name: account.name, email: account.email))?"
-        alert.informativeText = "AI Status Bar will stop monitoring this account. Your Claude Code and Codex CLI accounts stay unchanged."
+        alert.informativeText = "AI Status Bar will stop monitoring this account. Your CLI accounts stay unchanged."
         alert.addButton(withTitle: "Remove")
         alert.addButton(withTitle: "Cancel")
         NSApp.activate(ignoringOtherApps: true)

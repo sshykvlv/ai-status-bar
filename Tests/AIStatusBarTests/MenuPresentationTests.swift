@@ -133,4 +133,12 @@ final class MenuPresentationTests: XCTestCase {
         }
         XCTAssertEqual(MenuPresentation.authFailureBadge, "sign in again")
     }
+
+    func testGrokAuthFailureHasTerminalRecoveryCopy() {
+        let badge = MenuPresentation.authFailureBadge(for: .grok)
+
+        XCTAssertEqual(badge, "run grok")
+        XCTAssertEqual(MenuPresentation.statusLines(for: .failed(badge: badge)),
+                       ["Session expired", "Run grok in Terminal to refresh"])
+    }
 }
