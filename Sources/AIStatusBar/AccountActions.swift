@@ -11,7 +11,11 @@ enum AccountProvider: Equatable {
 }
 
 enum AccountActionPolicy {
-    static func provider(for kind: AccountKind) -> AccountProvider {
-        kind.isCodex ? .codex : .claude
+    static func provider(for kind: AccountKind) -> AccountProvider? {
+        switch kind {
+        case .claudeMain, .claudeOAuth: return .claude
+        case .codex, .codexOAuth: return .codex
+        case .grok: return nil
+        }
     }
 }

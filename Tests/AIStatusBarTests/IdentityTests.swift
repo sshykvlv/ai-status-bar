@@ -28,6 +28,7 @@ final class IdentityTests: XCTestCase {
         XCTAssertFalse(Account.isGenericPlaceholderName("Claude 3"))
         XCTAssertTrue(Account.isGenericPlaceholderName("Claude"))
         XCTAssertTrue(Account.isGenericPlaceholderName("Codex"))
+        XCTAssertTrue(Account.isGenericPlaceholderName("Grok"))
     }
 
     /// A third profile must not be assigned the same auto-name as an existing

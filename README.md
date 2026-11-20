@@ -1,6 +1,6 @@
 # AI Status Bar
 
-A menu bar app that shows how much usage you have left on multiple Claude accounts and Codex, at a glance.
+A menu bar app that shows how much usage you have left on multiple Claude accounts, Codex, and Grok, at a glance.
 
 ![AI Status Bar menu](docs/screenshot.png)
 
@@ -16,13 +16,15 @@ The in-app updater verifies each download in an isolated staging directory, then
 
 ## Usage
 
-Your existing Claude Code and Codex accounts are detected automatically so an upgrade does not lose any rows.
+Your existing Claude Code, Codex, and Grok CLI accounts are detected automatically so an upgrade does not lose any rows.
 
 On first launch macOS will ask to allow access to the "Claude Code-credentials" Keychain item — that's the app reading your existing Claude Code login (read-only, see Privacy below) to show its usage. Click **Always Allow** and you're set.
 
 Use **Add Account…**, choose Claude or Codex, and finish sign-in in your browser. AI Status Bar stores that session separately in macOS Keychain, refreshes it automatically, and never changes which account Claude Code or Codex CLI uses.
 
-If an older CLI-backed row expires, open its submenu and choose **Sign in again…**. The row keeps its name and position, then becomes app-owned so it no longer depends on a CLI folder or login.
+If an older Claude or Codex CLI-backed row expires, open its submenu and choose **Sign in again…**. The row keeps its name and position, then becomes app-owned so it no longer depends on a CLI folder or login.
+
+Grok is detected from your Grok CLI login and shows the percentage used from its weekly pool plus the reset time. Free accounts do not report a pool percentage, so they honestly show `—`; if the token expires, run `grok` in Terminal to refresh it.
 
 The icon is a mini equalizer: one continuous bar per account. Its height shows the exact percentage used; its color shifts gradually from green through yellow and orange to red as usage rises. Exact percentages remain in the tooltip.
 
@@ -46,7 +48,7 @@ Turn the block off in **Settings → Show Mac Stats**. Design and rules: [`docs/
 
 ## Privacy
 
-All requests go directly from your Mac to Anthropic and OpenAI. No servers, no telemetry. New OAuth sessions live only in your macOS Keychain. Existing Claude Code and Codex credentials are read locally as a compatibility layer; AI Status Bar never writes or refreshes them. Mac stats are read from the local kernel; process names and command lines never leave your Mac, and only processes you own can be quit.
+All requests go directly from your Mac to Anthropic, OpenAI, and xAI. No servers, no telemetry. New OAuth sessions live only in your macOS Keychain. Existing Claude Code and Codex credentials are read locally as a compatibility layer; AI Status Bar never writes or refreshes them. Grok credentials are read from `~/.grok/auth.json` (or `$GROK_HOME/auth.json`) read-only and are never written or refreshed. Mac stats are read from the local kernel; process names and command lines never leave your Mac, and only processes you own can be quit.
 
 ## Credits
 

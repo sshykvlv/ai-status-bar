@@ -20,6 +20,7 @@ struct AccountRowView: View {
         switch kind {
         case .claudeMain, .claudeOAuth: return "Claude"
         case .codex, .codexOAuth: return "Codex"
+        case .grok: return "Grok"
         }
     }
 
@@ -27,6 +28,7 @@ struct AccountRowView: View {
         switch kind {
         case .claudeMain, .claudeOAuth: return "Claude Code"
         case .codex, .codexOAuth: return "Codex"
+        case .grok: return "Grok"
         }
     }
 

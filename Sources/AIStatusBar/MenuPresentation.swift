@@ -14,9 +14,10 @@ enum MenuPresentation {
         "Check for Updates…",
     ]
     static let authFailureBadge = "sign in again"
+    static let grokAuthFailureBadge = "run grok"
 
     static func authFailureBadge(for kind: AccountKind) -> String {
-        authFailureBadge
+        kind == .grok ? grokAuthFailureBadge : authFailureBadge
     }
 
     static func windowTooltip(title: String, window: UsageWindow?) -> String {
@@ -31,11 +32,17 @@ enum MenuPresentation {
         case .ok(_, let fetchedAt):
             return [freshness(fetchedAt: fetchedAt, now: now)]
         case .failed(let badge):
+            if badge == grokAuthFailureBadge {
+                return ["Session expired", "Run grok in Terminal to refresh"]
+            }
             if badge == authFailureBadge { return ["Session expired", "No saved usage data"] }
             if badge == "offline" { return ["Offline", "No recent usage data"] }
             if badge == "rate-limited" { return ["Temporarily rate-limited"] }
             return [badge]
         case .stale(_, let fetchedAt, let badge):
+            if badge == grokAuthFailureBadge {
+                return ["Session expired", "Run grok in Terminal to refresh"]
+            }
             if badge == authFailureBadge {
                 return ["Session expired", freshness(fetchedAt: fetchedAt, now: now)]
             }
@@ -51,7 +58,12 @@ enum MenuPresentation {
         let identity = Account.isGenericPlaceholderName(account.name)
             ? (account.email ?? account.name)
             : account.name
-        let provider = account.kind.isCodex ? "Codex" : "Claude"
+        let provider: String
+        switch account.kind {
+        case .claudeMain, .claudeOAuth: provider = "Claude"
+        case .codex, .codexOAuth: provider = "Codex"
+        case .grok: provider = "Grok"
+        }
         var parts = [identity, provider]
         switch state {
         case .ok(let usage, let fetchedAt):
@@ -77,7 +89,7 @@ enum MenuPresentation {
     }
 
     private static func accessibilityStatus(for badge: String) -> String {
-        if badge == authFailureBadge { return "session expired" }
+        if badge == authFailureBadge || badge == grokAuthFailureBadge { return "session expired" }
         if badge == "rate-limited" { return "temporarily rate-limited" }
         return badge
     }

@@ -11,7 +11,8 @@ final class AccountStore: @unchecked Sendable {
 
     init(defaults: UserDefaults = .standard,
          hasClaudeMain: @escaping () -> Bool = { KeychainStore.claudeCodeTokens() != nil },
-         hasCodex: @escaping () -> Bool = { CodexAuth.load() != nil }) {
+         hasCodex: @escaping () -> Bool = { CodexAuth.load() != nil },
+         hasGrok: @escaping () -> Bool = { GrokAuth.load() != nil }) {
         self.defaults = defaults
         // Демо-режим: фиксированные аккаунты, без чтения/записи defaults и Keychain.
         if MockData.enabled {
@@ -25,13 +26,13 @@ final class AccountStore: @unchecked Sendable {
         if let list = defaults.array(forKey: dismissedKey) as? [String] {
             dismissedBuiltins = Set(list)
         }
-        discoverBuiltins(hasClaudeMain: hasClaudeMain(), hasCodex: hasCodex())
+        discoverBuiltins(hasClaudeMain: hasClaudeMain(), hasCodex: hasCodex(), hasGrok: hasGrok())
     }
 
-    /// Автоподхват: основной Claude (если есть Keychain-запись) и Codex (если есть auth.json).
+    /// Автоподхват: основной Claude (если есть Keychain-запись), Codex и Grok (если есть auth.json).
     /// Пропускает builtin-виды, которые владелец явно удалил (см. dismissedBuiltins) —
-    /// иначе Remove для claudeMain/codex не «прилипал» бы: он бы возвращался на каждом запуске.
-    private func discoverBuiltins(hasClaudeMain: Bool, hasCodex: Bool) {
+    /// иначе Remove для builtin-строки не «прилипал» бы: она возвращалась бы на каждом запуске.
+    private func discoverBuiltins(hasClaudeMain: Bool, hasCodex: Bool, hasGrok: Bool) {
         var changed = false
         if !accounts.contains(where: { $0.kind == .claudeMain && $0.claudeConfigDir == nil }),
            hasClaudeMain, !dismissedBuiltins.contains(AccountKind.claudeMain.rawValue) {
@@ -40,7 +41,12 @@ final class AccountStore: @unchecked Sendable {
         }
         if !accounts.contains(where: { $0.kind == .codex }),
            hasCodex, !dismissedBuiltins.contains(AccountKind.codex.rawValue) {
-            accounts.append(Account(id: UUID(), name: "Codex", kind: .codex, email: nil))
+            insertSorted(Account(id: UUID(), name: "Codex", kind: .codex, email: nil))
+            changed = true
+        }
+        if !accounts.contains(where: { $0.kind == .grok }),
+           hasGrok, !dismissedBuiltins.contains(AccountKind.grok.rawValue) {
+            accounts.append(Account(id: UUID(), name: "Grok", kind: .grok, email: nil))
             changed = true
         }
         if changed { persist() }
@@ -83,7 +89,8 @@ final class AccountStore: @unchecked Sendable {
         // ошибочно скрыло бы и основной builtin того же kind.
         let isBuiltinClaudeMain = account.kind == .claudeMain && account.claudeConfigDir == nil
         let isBuiltinCodex = account.kind == .codex && account.codexHome == nil
-        if isBuiltinClaudeMain || isBuiltinCodex {
+        let isBuiltinGrok = account.kind == .grok
+        if isBuiltinClaudeMain || isBuiltinCodex || isBuiltinGrok {
             dismissedBuiltins.insert(account.kind.rawValue)
             defaults.set(Array(dismissedBuiltins), forKey: dismissedKey)
         }
@@ -92,13 +99,15 @@ final class AccountStore: @unchecked Sendable {
         persist()
     }
 
-    /// Codex всегда последним.
+    /// Grok всегда последним; Codex остаётся после Claude-аккаунтов.
     private func insertSorted(_ account: Account) {
-        if let codexIdx = accounts.firstIndex(where: { $0.kind.isCodex }), !account.kind.isCodex {
-            accounts.insert(account, at: codexIdx)
-        } else {
-            accounts.append(account)
+        if account.kind == .grok { accounts.append(account); return }
+        if account.kind.isCodex {
+            accounts.insert(account, at: accounts.firstIndex(where: { $0.kind == .grok }) ?? accounts.endIndex)
+            return
         }
+        accounts.insert(account, at: accounts.firstIndex(where: { $0.kind.isCodex || $0.kind == .grok })
+                        ?? accounts.endIndex)
     }
 
     private func persist() { defaults.set(try? JSONEncoder().encode(accounts), forKey: key) }

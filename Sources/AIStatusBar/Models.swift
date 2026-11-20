@@ -22,6 +22,7 @@ enum AccountKind: String, Codable {
     case claudeOAuth
     case codex
     case codexOAuth
+    case grok
 
     var isCodex: Bool { self == .codex || self == .codexOAuth }
     var isOwned: Bool { self == .claudeOAuth || self == .codexOAuth }
@@ -53,7 +54,7 @@ struct Account: Codable, Equatable, Identifiable {
     /// name (see AppDelegate.addClaudeProfile) is covered without remembering
     /// to list it here too.
     static func isGenericPlaceholderName(_ name: String) -> Bool {
-        name == "Claude" || name == "Codex"
+        name == "Claude" || name == "Codex" || name == "Grok"
     }
 
     /// Next auto-assigned name for a new Claude CLI profile account, numbered by

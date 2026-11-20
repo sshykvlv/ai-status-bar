@@ -202,6 +202,9 @@ final class Poller {
             }
             ownTokens[account.id] = tokens
             return try await CodexProvider().fetchUsage(accessToken: tokens.accessToken)
+        case .grok:
+            guard let auth = GrokAuth.load() else { throw FetchError.unauthorized }
+            return try await GrokProvider().fetchUsage(auth: auth)
         }
     }
 
@@ -259,6 +262,10 @@ final class Poller {
             let identityToken = tokens.idToken ?? tokens.accessToken
             store.setEmail(id: account.id, CodexJWT.email(identityToken),
                            plan: CodexJWT.plan(identityToken))
+        case .grok:
+            if let email = GrokAuth.load()?.email {
+                store.setEmail(id: account.id, email)
+            }
         }
     }
 
